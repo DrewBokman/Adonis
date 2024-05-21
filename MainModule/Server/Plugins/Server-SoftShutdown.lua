@@ -41,16 +41,16 @@ return function(Vargs, GetEnv)
 		task.defer(function()
 			local waitTime = 5
 			local playersToTeleport = {}
-
+	
 			local jobid
 			local startTask, TeleportTask = service.Threads.NewTask("Teleport Players", function()
 				jobid = TeleportService:TeleportPartyAsync(game.PlaceId, playersToTeleport, {[PARAMETER_2_NAME] = true})
 			end)
-
+	
 			local function teleport(player)
 				local joindata = player:GetJoinData()
 				local data = type(joindata) == "table" and joindata.TeleportData
-
+	
 				if type(data) == "table" and data[PARAMETER_NAME] then
 					Remote.RemoveGui(player, "Message")
 					Remote.MakeGui(player, "Message", {
@@ -59,41 +59,46 @@ return function(Vargs, GetEnv)
 						Scroll = false;
 						Time = 1000
 					})
-
+	
 					task.wait(waitTime + 5)
-					waitTime /= 2
-					
-					Logs:AddLog("Script", `Teleporting {player.Name} back to the main game`)
+					waitTime = waitTime / 2
+	
+					Logs:AddLog("Script", "Teleporting " .. player.Name .. " back to the main game")
 					teleportedPlayers[player] = 1
 					table.insert(playersToTeleport, player)
 				end
 			end
-
+	
 			if #service.Players:GetPlayers() == 0 then
 				service.Players.PlayerAdded:Wait()
 			end
-
+	
+			-- Ensure jobid is set by waiting for at least one player to be added
 			service.Players.PlayerAdded:Connect(function(player)
 				local joindata = player:GetJoinData()
 				local data = type(joindata) == "table" and joindata.TeleportData
-
+	
 				if type(data) == "table" and data[PARAMETER_NAME] then
-					if TeleportTask.Running then
-						TeleportTask.Finished:wait()
+					if not jobid then
+						startTask()
+						TeleportTask.Finished:wait()  -- Wait for the task to finish and set jobid
 					end
-
+	
 					TeleportService:TeleportToPlaceInstance(game.PlaceId, jobid, player, "", {[PARAMETER_2_NAME] = true})
 				end
 			end)
+	
 			for _, player in service.Players:GetPlayers() do
 				teleport(player)
 			end
-
+	
 			if #playersToTeleport > 0 then
 				startTask()
 			end
 		end)
 	end
+	
+
 
 	Remote.Terminal.Commands.SoftShutdown = {
 		Usage = "restart";
