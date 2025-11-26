@@ -158,13 +158,6 @@ local function Pcall(func, ...)
 	return pSuccess, pError
 end
 
--- Use `task.spawn(pcall, ...)`, `task.spawn(Pcall, f, ...)` or `task.spawn(xpcall, f, handler, ...)` instead
-local function cPcall(func, ...)
-	return Pcall(function(...)
-		return coroutine.resume(coroutine.create(func), ...)
-	end, ...)
-end
-
 local function Routine(func, ...)
 	return coroutine.resume(coroutine.create(func), ...)
 end
@@ -320,7 +313,6 @@ server = {
 	Running = true;
 	Modules = {};
 	Pcall = Pcall;
-	cPcall = cPcall;
 	Routine = Routine;
 	LogError = logError;
 	ErrorLogs = ErrorLogs;
@@ -339,7 +331,6 @@ locals = {
 	Routine = Routine;
 	Folder = Folder;
 	GetEnv = GetEnv;
-	cPcall = cPcall;
 	Pcall = Pcall;
 };
 
@@ -628,7 +619,30 @@ return service.NewProxy({
 		server.Changelog = require(server.Shared.Changelog)
 		server.Credits = require(server.Shared.Credits)
 		server.DLL = require(server.Shared.DoubleLinkedList)
+		server.FormattedChangelog = table.create(#server.Changelog)
 
+		--// Create formatted changelog from standard changelog
+	  	local function applyColour(line)
+			local prefix = line:sub(1, 2)
+
+  	  	  	if prefix == "[v" or prefix == "[1" or prefix == "[0" or prefix == "1." or line:sub(1, 1) == "v" then
+      	  	  	return `<font color='#8FAEFF'>{line}</font>`
+  	  	  	elseif line:sub(1, 6) == "[Patch" then
+  	  	  	  	return `<font color='#F0B654'>{line}</font>`
+  	  	  	elseif line:sub(1, 9) == "Version: " then
+				return `<b>{line}</b>`
+			elseif line:sub(1,2) == "# " then
+				return `<b>{string.sub(line, 3)}</b>`
+			else
+  	  	  	  	return line
+  	  	  	end
+	  	end
+
+	  	for i, line in ipairs(server.Changelog) do
+          	server.FormattedChangelog[i] = applyColour(line)
+  	  	end
+
+		--// Setup MaterialIcons 
 		do
 			local MaterialIcons = require(server.Shared.MatIcons)
 			server.MatIcons = setmetatable({}, {
@@ -698,6 +712,7 @@ return service.NewProxy({
 
 		--// Variables that rely on core modules being initialized
 		server.Logs.Errors = ErrorLogs
+		server.Core.SilentStartup = data.SilentStartup
 
 		--// Load any afterinit functions from modules (init steps that require other modules to have finished loading)
 		for _, f in pairs(runAfterInit) do
@@ -710,7 +725,7 @@ return service.NewProxy({
 		end
 
 		for _, module in pairs(data.ServerPlugins or {}) do
-			LoadModule(module, false, {script = module})
+			LoadModule(module, false, {script = module, cPcall = server.cPcall})
 		end
 
 		--// We need to do some stuff *after* plugins are loaded (in case we need to be able to account for stuff they may have changed before doing something, such as determining the max length of remote commands)
@@ -742,7 +757,7 @@ return service.NewProxy({
 		end
 
 		if data.Loader then
-			if not server.Core.SilentStartup then
+			if not data.SilentStartup then
 				print(`Loading {data.NightlyMode and "Version: Nightly" or server.Changelog and server.Changelog[1] or ""} Complete; Required by {data.Loader:GetFullName()}{data.Model:FindFirstChild("Version") and (" version: "..data.Model.Version.Value) or ""}`)
 			end
 		else

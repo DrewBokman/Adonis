@@ -528,7 +528,8 @@ return function(Vargs, env)
 				Remote.MakeGui(plr, "List", {
 					Title = "Change Log";
 					Icon = server.MatIcons["Text snippet"];
-					Table = server.Changelog;
+					Table = server.FormattedChangelog;
+					RichText = true;
 					Size = {500, 400};
 				})
 			end
@@ -597,6 +598,7 @@ return function(Vargs, env)
 				Remote.MakeGui(plr, "List", {
 					Title = "Usage";
 					Tab = usage;
+					Icon = server.MatIcons["Quick reference"];
 					Size = {300, 250};
 					RichText = true;
 				})
@@ -976,8 +978,10 @@ return function(Vargs, env)
 				local elevated = Admin.CheckAdmin(plr)
 
 				local serverInfo = select(2, xpcall(function()
-					local res = service.HttpService:JSONDecode(service.HttpService:GetAsync("https://ipinfo.io/json"))
-
+					local res = Variables.IPInfo or service.HttpService:JSONDecode(service.HttpService:GetAsync("https://ipinfo.io/json"))
+					if not Variables.IPInfo then
+						Variables.IPInfo = res
+					end
 					return {
 						country = `{require(server.Dependencies.CountryRegionCodes)[res.country] or "N/A"} ({res.country})`,
 						city = res.city,

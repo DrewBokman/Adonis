@@ -6,8 +6,9 @@
 		Sourced from Google LLC:
 			https://fonts.google.com/icons
 			('Sharp' style, white colored)
+			
 	════════════════════════════════════════════
-	https://www.roblox.com/library/7646623585
+	https://create.roblox.com/store/asset/7646623585
 ]]
 
 return { -- Decal IDs
@@ -17,6 +18,7 @@ return { -- Decal IDs
 	["Add circle"] = 7541498940,
 	["Add circle outline"] = 7541499713,
 	["Add moderator"] = 7495454078,
+	["Alert"] = 7467248902,
 	["Admin panel settings"] = 7495455898,
 	["Announcement"] = 7495456913,
 	["Arrow back"] = 7541501140,
@@ -98,6 +100,7 @@ return { -- Decal IDs
 	["Priority high"] = 7541925009,
 	["Privacy tip"] = 7541923707,
 	["QR code scanner"] = 7543119186,
+	["Quick reference"] = 17557073691;
 	["Refresh"] = 7549521656,
 	["Remove moderator"] = 7536810074,
 	["Reply"] = 7541922000,
