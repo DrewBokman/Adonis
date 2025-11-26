@@ -13,7 +13,7 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4.1.4
+    - uses: actions/checkout@v4.1.7
 
     - uses: ok-nick/setup-aftman@v0.4.2
       with:
@@ -21,7 +21,7 @@ jobs:
 
     - name: Cache Roblox Standard Library
       id: cache-roblox-std
-      uses: actions/cache@v4.0.2
+      uses: actions/cache@v4.2.2
       with:
         path: roblox.yml
         key: roblox-std
