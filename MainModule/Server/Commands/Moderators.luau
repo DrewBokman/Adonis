@@ -243,7 +243,8 @@ return function(Vargs, env)
 			Description = "Make a message and makes it stay for the amount of time (in seconds) you supply";
 			AdminLevel = "Moderators";
 			Function = function(plr: Player, args: {string})
-				Functions.Message(`Message from {service.FormatPlayer(plr)}`, service.BroadcastFilter(assert(args[2], "Missing message"), plr), service.GetPlayers(), true, assert(tonumber(args[1]), "Invalid time amount (must be number)"))
+				-- Use sanitized FormatPlayer to prevent XSS in RichText contexts
+				Functions.Message(`Message from {service.FormatPlayer(plr, false, true)}`, service.BroadcastFilter(assert(args[2], "Missing message"), plr), service.GetPlayers(), true, assert(tonumber(args[1]), "Invalid time amount (must be number)"))
 			end
 		};
 
@@ -255,7 +256,8 @@ return function(Vargs, env)
 			Description = "Makes a message";
 			AdminLevel = "Moderators";
 			Function = function(plr: Player, args: {string})
-				Functions.Message(plr, `Message from {service.FormatPlayer(plr)}`, service.BroadcastFilter(assert(args[1], "Missing message"), plr), nil, service.GetPlayers(), true)
+				-- Use sanitized FormatPlayer to prevent XSS in RichText contexts
+				Functions.Message(plr, `Message from {service.FormatPlayer(plr, false, true)}`, service.BroadcastFilter(assert(args[1], "Missing message"), plr), nil, service.GetPlayers(), true)
 			end
 		};
 
@@ -270,7 +272,8 @@ return function(Vargs, env)
 				assert(args[1], "Missing player name")
 				assert(args[2], "Missing message")
 
-				local Sender = string.format("Message from %s", service.FormatPlayer(plr))
+				-- Use sanitized FormatPlayer to prevent XSS in RichText contexts
+				local Sender = string.format("Message from %s", service.FormatPlayer(plr, false, true))
 				for _, v in service.GetPlayers(plr, args[1]) do
 					Functions.Message(Sender, service.Filter(args[2], plr, v), {v}, true)
 				end
@@ -313,7 +316,8 @@ return function(Vargs, env)
 				assert(args[2], "Missing message")
 				for _, v in service.GetPlayers(plr, args[1]) do
 					Remote.RemoveGui(v, "Notify")
-					Functions.Notify(`Message from {service.FormatPlayer(plr)}`, service.Filter(args[2], plr, v), {v})
+					-- Use sanitized FormatPlayer to prevent XSS in RichText contexts
+					Functions.Notify(`Message from {service.FormatPlayer(plr, false, true)}`, service.Filter(args[2], plr, v), {v})
 				end
 			end
 		};
@@ -327,7 +331,8 @@ return function(Vargs, env)
 			AdminLevel = "Moderators";
 			Function = function(plr: Player, args: {string})
 				assert(args[1], "Missing message")
-				Functions.Hint(string.format("%s: %s", service.FormatPlayer(plr), service.BroadcastFilter(args[1], plr)), service.GetPlayers(), nil, service.FormatPlayer(plr), `rbxthumb://type=AvatarHeadShot&id={plr.UserId}&w=48&h=48`)
+				-- Use sanitized FormatPlayer (3rd param = true) to prevent XSS in RichText contexts
+				Functions.Hint(string.format("%s: %s", service.FormatPlayer(plr, false, true), service.BroadcastFilter(args[1], plr)), service.GetPlayers(), nil, service.FormatPlayer(plr, false, true), `rbxthumb://type=AvatarHeadShot&id={plr.UserId}&w=48&h=48`)
 			end
 		};
 
@@ -339,7 +344,8 @@ return function(Vargs, env)
 			Description = "Makes a hint and make it stay on the screen for the specified amount of time";
 			AdminLevel = "Moderators";
 			Function = function(plr: Player, args: {string})
-				Functions.Hint(service.BroadcastFilter(assert(args[2], "Missing message"), plr), service.GetPlayers(), assert(tonumber(args[1]), "Invalid time amount (must be a number)"), service.FormatPlayer(plr), `rbxthumb://type=AvatarHeadShot&id={plr.UserId}&w=48&h=48`)
+				-- Use sanitized FormatPlayer (3rd param = true) to prevent XSS in RichText contexts
+				Functions.Hint(service.BroadcastFilter(assert(args[2], "Missing message"), plr), service.GetPlayers(), assert(tonumber(args[1]), "Invalid time amount (must be a number)"), service.FormatPlayer(plr, false, true), `rbxthumb://type=AvatarHeadShot&id={plr.UserId}&w=48&h=48`)
 			end
 		};
 
@@ -553,11 +559,10 @@ return function(Vargs, env)
 			Function = function(plr: Player, args: {string}, data: {any})
 				for _, v in service.GetPlayers(plr, args[1]) do
 					if service.TextChatService and service.TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-						local TextToUse = args[2]
-						if data.Options.Chat ~= true then
-							TextToUse = service.SanitizeXML(args[2] or "Hello world!")
-						end
-						Remote.Send(v, "Function", "DisplaySystemMessageInTextChat", nil, `<font color="rgb(255, 64, 77)">{service.Filter(TextToUse, plr, v)}</font>`)
+						-- Always sanitize for RichText contexts to prevent XSS
+						-- Filter first (for profanity), then sanitize (for XSS protection)
+						local sanitizedText = service.SanitizeXML(service.Filter(args[2] or "Hello world!", plr, v))
+						Remote.Send(v, "Function", "DisplaySystemMessageInTextChat", nil, `<font color="rgb(255, 64, 77)">{sanitizedText}</font>`)
 					else
 						Remote.Send(v, "Function", "ChatMessage", service.Filter(args[2], plr, v), Color3.fromRGB(255, 64, 77))
 					end
@@ -6953,13 +6958,19 @@ return function(Vargs, env)
 		TextToSpeech = {
 			Prefix = Settings.Prefix;
 			Commands = {"tell", "tts", "texttospeech"};
-			Args = {"player", "message"};
+			Args = {"player", "message", "optional voiceId (1-10)"};
 			Filter = true;
-			Description = "[Experimental] Says aloud the supplied text";
+			Description = "Says aloud the supplied text using Roblox's AudioTextToSpeech API with phoneme-based fallback. Voice IDs: 1=British male, 2=British female, 3=US male #1, 4=US female #1, 5=US male #2, 6=US female #2, 7=Australian male, 8=Australian female, 9-10=Retro";
 			AdminLevel = "Moderators";
 			Function = function(plr: Player, args: {string})
+				assert(args[1], "Missing target player(s) (argument #1)")
+				assert(args[2], "Missing message to speak (argument #2)")
+
+				local voiceId = tonumber(args[3]) or 3 -- Default to US male #1
+				voiceId = math.clamp(voiceId, 1, 10)
+
 				for _, v in service.GetPlayers(plr, args[1]) do
-					Remote.Send(v, "Function", "TextToSpeech", args[2])
+					Remote.Send(v, "Function", "TextToSpeech", service.Filter(args[2], plr, v), voiceId)
 				end
 			end
 		};

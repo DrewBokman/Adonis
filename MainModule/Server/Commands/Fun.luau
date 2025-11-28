@@ -11,6 +11,50 @@ return function(Vargs, env)
 	local Routine = env.Routine
 	local Pcall = env.Pcall
 
+	-- Helper function to apply or remove glitch effects
+	local function ApplyGlitchEffect(plr: Player, targetPlayerArg: string, glitchType: string?, defaultIntensity: number?, removeExisting: boolean?)
+		if not glitchType then
+			-- Remove glitch effect
+			for _, v in service.GetPlayers(plr, targetPlayerArg) do
+				if v.Character then
+					local torso = v.Character:FindFirstChild("HumanoidRootPart")
+					if torso then
+						local scr = torso:FindFirstChild("Glitchify")
+						if scr then
+							scr:Destroy()
+						end
+					end
+				end
+			end
+		else
+			-- Apply glitch effect
+			local num = tostring(defaultIntensity or 15)
+			local scr = Deps.Assets.Glitcher:Clone()
+			scr.Num.Value = num
+			scr.Type.Value = glitchType
+
+			for _, v in service.GetPlayers(plr, targetPlayerArg) do
+				if v.Character then
+					local torso = v.Character:FindFirstChild("HumanoidRootPart")
+					if torso then
+						-- Remove existing glitch if requested
+						if removeExisting then
+							local existing = torso:FindFirstChild("Glitchify")
+							if existing then
+								existing:Destroy()
+							end
+						end
+
+						local new = scr:Clone()
+						new.Parent = torso
+						new.Name = "Glitchify"
+						new.Disabled = false
+					end
+				end
+			end
+		end
+	end
+
 	return {
 		Glitch = {
 			Prefix = Settings.Prefix;
@@ -20,21 +64,8 @@ return function(Vargs, env)
 			Fun = true;
 			AdminLevel = "Moderators";
 			Function = function(plr: Player, args: {string})
-				local num = tostring(args[2] or 15)
-				local scr = Deps.Assets.Glitcher:Clone()
-				scr.Num.Value = num
-				scr.Type.Value = "trippy"
-				for _, v in service.GetPlayers(plr, args[1]) do
-					local new = scr:Clone()
-					if v.Character then
-						local torso = v.Character:FindFirstChild("HumanoidRootPart")
-						if torso then
-							new.Parent = torso
-							new.Name = "Glitchify"
-							new.Disabled = false
-						end
-					end
-				end
+				local intensity = tonumber(args[2]) or 15
+				ApplyGlitchEffect(plr, args[1], "trippy", intensity, false)
 			end
 		};
 
@@ -46,21 +77,8 @@ return function(Vargs, env)
 			Fun = true;
 			AdminLevel = "Moderators";
 			Function = function(plr: Player, args: {string})
-				local num = tostring(args[2] or 150)
-				local scr = Deps.Assets.Glitcher:Clone()
-				scr.Num.Value = num
-				scr.Type.Value = "ghost"
-				for _, v in service.GetPlayers(plr, args[1]) do
-					local new = scr:Clone()
-					if v.Character then
-						local torso = v.Character:FindFirstChild("HumanoidRootPart")
-						if torso then
-							new.Parent = torso
-							new.Name = "Glitchify"
-							new.Disabled = false
-						end
-					end
-				end
+				local intensity = tonumber(args[2]) or 150
+				ApplyGlitchEffect(plr, args[1], "ghost", intensity, false)
 			end
 		};
 
@@ -72,23 +90,8 @@ return function(Vargs, env)
 			Fun = true;
 			AdminLevel = "Moderators";
 			Function = function(plr: Player, args: {string})
-				local num = tostring(args[2] or 0.1)
-				local scr = Deps.Assets.Glitcher:Clone()
-				scr.Num.Value = num
-				scr.Type.Value = "vibrate"
-				for _, v in service.GetPlayers(plr, args[1]) do
-					local new = scr:Clone()
-					if v.Character then
-						local torso = v.Character:FindFirstChild("HumanoidRootPart")
-						if torso then
-							local scr = torso:FindFirstChild("Glitchify")
-							if scr then scr:Destroy() end
-							new.Parent = torso
-							new.Name = "Glitchify"
-							new.Disabled = false
-						end
-					end
-				end
+				local intensity = tonumber(args[2]) or 0.1
+				ApplyGlitchEffect(plr, args[1], "vibrate", intensity, true)
 			end
 		};
 
@@ -100,15 +103,7 @@ return function(Vargs, env)
 			Fun = true;
 			AdminLevel = "Moderators";
 			Function = function(plr: Player, args: {string})
-				for _, v in service.GetPlayers(plr, args[1]) do
-					local torso = v.Character:FindFirstChild("HumanoidRootPart")
-					if torso then
-						local scr = torso:FindFirstChild("Glitchify")
-						if scr then
-							scr:Destroy()
-						end
-					end
-				end
+				ApplyGlitchEffect(plr, args[1], nil, nil, nil)
 			end
 		};
 

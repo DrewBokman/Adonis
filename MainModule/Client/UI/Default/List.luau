@@ -100,7 +100,14 @@ return function(data, env)
 		end
 
 		for _, v in ipairs(newTab) do
-			v.Text = (data.Sanitize and service.SanitizeString(v.Text)) or v.Text
+			-- Auto-sanitize when RichText is enabled to prevent XSS vulnerabilities
+		-- Also sanitize if explicitly requested via data.Sanitize flag
+		if RichText or data.Sanitize then
+			v.Text = service.SanitizeXML(v.Text)
+			if v.Desc then
+				v.Desc = service.SanitizeXML(v.Desc)
+			end
+		end
 
 			if v.Duplicates then
 				v.Text = `(x{v.Duplicates}) {v.Text}`

@@ -970,12 +970,22 @@ return function(errorHandler, eventChecker, fenceSpecific, env)
 			return if success then value else timeObj:ToIsoDate()
 		end;
 
-		FormatPlayer = function(plr, withUserId)
+		FormatPlayer = function(plr, withUserId, sanitize)
 			if not plr then return "%UNKNOWN%" end
 			if plr.Name == "[Unknown User]" then
 				return `[Unknown User{(if plr.UserId and plr.UserId ~= -1 then ` {plr.UserId}` else "")}]`
 			end
-			local str = if plr.DisplayName == plr.Name then `@{plr.Name}` else `{plr.DisplayName or "???"} ({plr.Name or "???"})`
+
+			local displayName = plr.DisplayName or "???"
+			local userName = plr.Name or "???"
+
+			-- Sanitize if requested (should be used for RichText contexts to prevent XSS)
+			if sanitize then
+				displayName = service.SanitizeXML(displayName)
+				userName = service.SanitizeXML(userName)
+			end
+
+			local str = if plr.DisplayName == plr.Name then `@{userName}` else `{displayName} ({userName})`
 			if withUserId then
 				str ..= `[{if plr.UserId and plr.UserId ~= -1 then plr.UserId else "?"}]`
 			end

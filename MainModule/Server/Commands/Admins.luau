@@ -284,14 +284,14 @@ return function(Vargs, env)
 			Function = function(plr: Player, args: {string}, data: {any})
 				for _, v in service.GetPlayers() do
 					if service.TextChatService and service.TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-						local TextToUse = args[1]
-						if data.Options.Chat ~= true then
-							TextToUse = service.SanitizeXML(args[1] or "Hello world!")
-						end
+						-- Always sanitize for RichText contexts to prevent XSS
+						-- Filter first (for profanity), then sanitize (for XSS protection)
+						local filteredText = service.Filter(args[1] or "Hello world!", plr, v)
+						local sanitizedText = service.SanitizeXML(filteredText)
 						Remote.Send(
-							v, "Function", "DisplaySystemMessageInTextChat", nil, `{
-							string.format(`<font color="rgb(255, 64, 77)"><b>[%s]</b></font> <font color="rgb(235, 99, 108)">%s</font>`, Settings.SystemTitle, service.Filter(TextToUse), plr, v)
-							}`)
+							v, "Function", "DisplaySystemMessageInTextChat", nil,
+							string.format(`<font color="rgb(255, 64, 77)"><b>[%s]</b></font> <font color="rgb(235, 99, 108)">%s</font>`, service.SanitizeXML(Settings.SystemTitle), sanitizedText)
+						)
 					else
 						Remote.Send(v, "Function", "ChatMessage", string.format("[%s] %s", Settings.SystemTitle, service.Filter(args[1], plr, v)), Color3.fromRGB(255,64,77))
 					end
