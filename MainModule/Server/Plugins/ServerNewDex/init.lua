@@ -68,36 +68,64 @@ return function(Vargs)
 				Volume = 60, Pitch = 61, TimePosition = 62,
 			}
 
-			-- Class icon mapping and display orders from original RMD
+			-- Class icon mapping from original RMD (all 277 classes)
 			local classIconMap = {
-				-- Remotes/Events
-				RemoteEvent = 54, RemoteFunction = 55, BindableEvent = 67, BindableFunction = 66,
-				-- Services
-				Workspace = 19, Players = 20, Lighting = 18, ReplicatedStorage = 17, ReplicatedFirst = 17,
-				ServerScriptService = 16, ServerStorage = 17, UserInputService = 10, RunService = 10,
-				CollectionService = 10, HttpService = 10, MarketplaceService = 10, TeleportService = 10,
-				GamepadService = 10, NetworkServer = 10, NetworkClient = 10,
-				-- GUI
-				ScreenGui = 15, StarterGui = 15, Frame = 15, TextLabel = 15, TextButton = 15,
-				ImageLabel = 15, ImageButton = 15, ScrollingFrame = 15, UICorner = 15,
-				UIAspectRatioConstraint = 15, UIPadding = 15, UIGridLayout = 15, UIListLayout = 15,
-				UITableLayout = 15, UIScale = 15, SurfaceGui = 15, BillboardGui = 15, ContextActionService = 10,
-				-- Scripts
-				LocalScript = 10, Script = 12, ModuleScript = 11,
-				-- Parts
-				Part = 2, Model = 3, Terrain = 4, MeshPart = 2, UnionOperation = 2, NegateOperation = 2,
-				-- Humanoid
-				Humanoid = 9, Torso = 2, Head = 2, LeftArm = 2, RightArm = 2, LeftLeg = 2, RightLeg = 2,
-				-- Effects
-				ParticleEmitter = 6, Fire = 6, Smoke = 6, Explosion = 6, Sound = 5,
-				Weld = 7, WeldConstraint = 7, Motor = 7, Motor6D = 7, BodyVelocity = 7, BodyPosition = 7, BodyGyro = 7,
-				-- Rendering
-				Decal = 1, Texture = 1, Camera = 8, Light = 6, PointLight = 6, SurfaceLight = 6, Attachment = 81,
-				-- Values
-				Instance = 0, Configuration = 0, Folder = 0, IntValue = 0, StringValue = 0, BoolValue = 0,
-				Color3Value = 0, Vector3Value = 0, NumberValue = 0, ObjectValue = 0, RayValue = 0, CFrameValue = 0,
-				-- Misc
-				StarterPlayer = 14, StarterPack = 13, Actor = 113,
+				Accessory = 32, Accoutrement = 32, Actor = 113, AdGui = 145, AdPortal = 146,
+				AlignOrientation = 100, AlignPosition = 99, AngularVelocity = 103, Animation = 60, AnimationController = 60,
+				AnimationTrack = 60, Animator = 60, ArcHandles = 56, Atmosphere = 28, Attachment = 81,
+				AudioAnalyzer = 84, AudioChannelMixer = 84, AudioChannelSplitter = 84, AudioChorus = 84, AudioCompressor = 84,
+				AudioDeviceInput = 11, AudioDeviceOutput = 11, AudioDistortion = 84, AudioEcho = 84, AudioEmitter = 11,
+				AudioEqualizer = 84, AudioFader = 84, AudioFilter = 84, AudioFlanger = 84, AudioGate = 84,
+				AudioLimiter = 84, AudioListener = 11, AudioPitchShifter = 84, AudioPlayer = 11, AudioReverb = 84,
+				AudioTextToSpeech = 84, AudioTremolo = 84, Backpack = 20, BallSocketConstraint = 86, Beam = 96,
+				BillboardGui = 64, BindableEvent = 67, BindableFunction = 66, BlockMesh = 8, BloomEffect = 83,
+				BlurEffect = 83, BodyAngularVelocity = 14, BodyForce = 14, BodyGyro = 14, BodyPosition = 14,
+				BodyThrust = 14, BodyVelocity = 14, Bone = 114, BoolValue = 4, BoxHandleAdornment = 111,
+				BrickColorValue = 4, CFrameValue = 4, Camera = 5, CanvasGroup = 48, ChannelSelectorSoundEffect = 84,
+				CharacterMesh = 60, Chat = 33, ChatInputBarConfiguration = 142, ChatService = 33, ChatWindowConfiguration = 141,
+				ChorusSoundEffect = 84, ClickDetector = 41, Clouds = 28, Color3Value = 4, ColorCorrectionEffect = 83,
+				CompressorSoundEffect = 84, ConeHandleAdornment = 110, Configuration = 58, Constraint = 86, CoreGui = 46,
+				CorePackages = 20, CornerWedgePart = 1, CustomEvent = 4, CustomEventReceiver = 4, CylinderHandleAdornment = 109,
+				CylinderMesh = 8, CylindricalConstraint = 95, Debris = 30, Decal = 7, DepthOfFieldEffect = 83,
+				Dialog = 62, DialogChoice = 63, DistortionSoundEffect = 84, DoubleConstrainedValue = 4, DragDetector = 41,
+				EchoSoundEffect = 84, EqualizerSoundEffect = 84, Explosion = 36, FaceControls = 129, Fire = 61,
+				Flag = 38, FlagStand = 39, FlangeSoundEffect = 84, FloorWire = 4, Folder = 77,
+				ForceField = 37, Frame = 48, GuiButton = 52, GuiMain = 47, Handles = 53,
+				Hat = 45, Highlight = 133, HingeConstraint = 87, Hint = 33, HopperBin = 22,
+				Humanoid = 9, HumanoidDescription = 104, IKControl = 53, ImageButton = 52, ImageHandleAdornment = 108,
+				ImageLabel = 49, IntConstrainedValue = 4, IntValue = 4, JointInstance = 34, Keyframe = 60,
+				KeyframeMarker = 60, Light = 13, Lighting = 13, LineForce = 101, LineHandleAdornment = 107,
+				LinearVelocity = 132, LocalScript = 18, LocalizationService = 92, LocalizationTable = 97, MarketplaceService = 46,
+				MaterialService = 131, MaterialVariant = 130, MeshPart = 73, Message = 33, Model = 2,
+				ModuleScript = 76, Motor6D = 106, NegateOperation = 72, NetworkClient = 16, NetworkReplicator = 29,
+				NetworkServer = 15, NoCollisionConstraint = 105, NumberPose = 60, NumberValue = 4, ObjectValue = 4,
+				PackageLink = 98, Pants = 44, ParallelRampPart = 1, Part = 1, PartPairLasso = 57,
+				ParticleEmitter = 80, PathfindingLink = 137, PathfindingModifier = 128, PitchShiftSoundEffect = 84, Plane = 134,
+				PlaneConstraint = 134, Platform = 35, Player = 12, PlayerGui = 46, PlayerScripts = 78,
+				Players = 21, Plugin = 86, PluginDebugService = 46, PluginGuiService = 46, PointLight = 13,
+				Pose = 60, PoseBase = 60, PrismPart = 1, PrismaticConstraint = 88, ProximityPrompt = 124,
+				PyramidPart = 1, RayValue = 4, RemoteEvent = 75, RemoteFunction = 74, RenderingTest = 5,
+				ReplicatedFirst = 70, ReplicatedStorage = 70, ReverbSoundEffect = 84, RightAngleRampPart = 1, RigidConstraint = 135,
+				RobloxPluginGuiService = 46, RocketPropulsion = 14, RodConstraint = 90, RopeConstraint = 89, ScreenGui = 47,
+				Script = 6, ScrollingFrame = 48, Seat = 35, SelectionBox = 54, SelectionPartLasso = 57,
+				SelectionPointLasso = 57, SelectionSphere = 54, ServerScriptService = 71, ServerStorage = 69, Shirt = 43,
+				ShirtGraphic = 40, SkateboardPlatform = 35, Sky = 28, SlidingBallConstraint = 88, Smoke = 59,
+				Snap = 34, Sound = 11, SoundGroup = 85, SoundService = 31, Sparkles = 42,
+				SpawnLocation = 25, Speaker = 11, SpecialMesh = 8, SphereHandleAdornment = 112, SpotLight = 13,
+				SpringConstraint = 91, StandalonePluginScripts = 78, StarterCharacterScripts = 78, StarterGear = 20, StarterGui = 46,
+				StarterPack = 20, StarterPlayer = 79, StarterPlayerScripts = 78, Status = 2, StringValue = 4,
+				SunRaysEffect = 83, SurfaceAppearance = 10, SurfaceGui = 64, SurfaceLight = 13, SurfaceSelection = 55,
+				Team = 24, Teams = 23, Terrain = 65, TerrainDetail = 144, TerrainRegion = 65,
+				TestService = 68, TextBox = 51, TextButton = 51, TextChannel = 140, TextChatCommand = 138,
+				TextChatService = 143, TextLabel = 50, TextSource = 139, Texture = 10, Tool = 17,
+				Torque = 103, TorsionSpringConstraint = 125, TouchTransmitter = 37, Trail = 93, TremoloSoundEffect = 84,
+				TrussPart = 1, UIAspectRatioConstraint = 26, UICorner = 26, UIGradient = 26, UIGridLayout = 26,
+				UIListLayout = 26, UIPadding = 26, UIPageLayout = 26, UIScale = 26, UISizeConstraint = 26,
+				UIStroke = 26, UITableLayout = 26, UITextSizeConstraint = 26, UnionOperation = 73, UniversalConstraint = 123,
+				ValueBase = 4, Vector3Value = 4, VectorForce = 102, VehicleSeat = 35, VideoFrame = 120,
+				ViewportFrame = 52, VoiceChatService = 136, VoiceSource = 11, WedgePart = 1, Weld = 34,
+				WeldConstraint = 94, Wire = 17, WireframeHandleAdornment = 113, Workspace = 19, WorldModel = 19,
+				WrapLayer = 126, WrapTarget = 127,
 			}
 
 			-- Class sort/display order (from original RMD - these are critical for proper sorting)
