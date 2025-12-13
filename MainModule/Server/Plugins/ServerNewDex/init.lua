@@ -13,14 +13,10 @@ return function(Vargs)
 	local Admin = Server.Admin
 	local Core = Server.Core
 
-	local HttpService = Service.HttpService
-	local Success, APIDump, Reflection = nil
+	local ReflectionService = Service.ReflectionService
+	local APIDump = nil
+	local RMDData = nil -- Reflection Metadata from ReflectionService
 	local ServerNewDex = {}
-
-	-- API/Reflection URLs
-	local ROBLOX_CLIENT_TRACKER_BASE = "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox"
-	local API_DUMP_URL = "https://github.com/MaximumADHD/Roblox-Client-Tracker/raw/roblox/API-Dump.json"
-	local REFLECTION_METADATA_URL = ROBLOX_CLIENT_TRACKER_BASE .. "/ReflectionMetadata.xml"
 
 	local newDex_main = script:WaitForChild("Dex_Client", 120)
 	local Event = ServerNewDex.Event
@@ -36,32 +32,96 @@ return function(Vargs)
 		end
 	end
 
-	task.delay(0.25, function() -- Load Dex instance data asynchronously
-		if Server.HTTP.HttpEnabled then
-			while true do
-				Success, APIDump = pcall(function()
-					return HttpService:GetAsync(API_DUMP_URL)
-				end)
-				if Success and APIDump then
-					break
+	-- Generate API data from ReflectionService asynchronously
+	task.delay(0.25, function()
+		print("[SERVER] Starting API data generation from ReflectionService...")
+
+		local reflectionSuccess, result = pcall(function()
+			-- Get all classes from ReflectionService
+			local classesData = ReflectionService:GetClasses()
+
+			-- Build API structure matching the expected format
+			local apiData = {
+				Classes = {},
+				Enums = {},
+			}
+
+			-- Process classes
+			for _, classInfo in ipairs(classesData) do
+				local className = classInfo.Name
+
+				-- Convert tags to dictionary format
+				local tags = {}
+				if classInfo.Tags then
+					for _, tag in ipairs(classInfo.Tags) do
+						tags[tostring(tag)] = true
+					end
 				end
-				task.wait(1)
-			end
-			Logs:AddLog("Script", "Successfully loaded instance API dump to Dex")
-			while true do
-				Success, Reflection = pcall(function()
-					return HttpService:GetAsync(REFLECTION_METADATA_URL)
-				end)
-				if Success and Reflection then
-					break
+
+				-- Build class entry
+				local classEntry = {
+					Name = className,
+					Superclass = classInfo.Superclass,
+					Tags = tags,
+					Members = {},
+				}
+
+				-- Get and store properties/events/functions for this class
+				local propertiesData = ReflectionService:GetPropertiesOfClass(className)
+
+				for _, prop in ipairs(propertiesData) do
+					-- Include all properties (inherited and direct)
+					local propTags = {}
+					if prop.Tags then
+						for _, tag in ipairs(prop.Tags) do
+							propTags[tostring(tag)] = true
+						end
+					end
+
+					local memberEntry = {
+						Name = prop.Name,
+						MemberType = "Property",
+						Category = (prop.Display and prop.Display.Category) or "Data",
+						Security = {
+							Read = (prop.Permits and tostring(prop.Permits.Read)) or "None",
+							Write = (prop.Permits and tostring(prop.Permits.Write)) or "None",
+						},
+						Serialization = {
+							CanSave = prop.Serialized or false,
+							CanLoad = prop.Serialized or false,
+						},
+						Tags = propTags,
+					}
+
+					-- Add ValueType
+					if prop.Type then
+						local valueTypeName = prop.Type.ScriptType or prop.Type.EngineType
+						if valueTypeName then
+							memberEntry.ValueType = {
+								Name = valueTypeName,
+								Category = "Primitive",
+							}
+						end
+					end
+
+					table.insert(classEntry.Members, memberEntry)
 				end
-				task.wait(1)
+
+				apiData.Classes[className] = classEntry
 			end
-			Logs:AddLog("Script", "Successfully loaded reflection metadata to Dex")
+
+			print("[SERVER] API data generation complete. Classes:", table.maxn(apiData.Classes))
+			-- JSON encode for transmission to client
+			return game:GetService("HttpService"):JSONEncode(apiData)
+		end)
+
+		if reflectionSuccess then
+			APIDump = result
+			print("[SERVER] Successfully generated API data from ReflectionService")
+			Logs:AddLog("Script", "Successfully generated API data from ReflectionService")
 		else
-			Logs:AddLog("Script", "Access to HttpService is not enabled! Dex API dump could not be fetched!")
-			Logs:AddLog("Errors", "Access to HttpService is not enabled! Dex API dump could not be fetched!")
-			--logError("Access to HttpService is not enabled! Dex api dump could not be fetched!")
+			print("[SERVER ERROR] ReflectionService failed:", tostring(result))
+			Logs:AddLog("Errors", "Failed to generate API data from ReflectionService: " .. tostring(result))
 		end
 	end)
 
@@ -212,7 +272,11 @@ return function(Vargs)
 			return APIDump or false
 		end,
 		fetchrmd = function(Player: Player)
-			return Reflection or false
+			-- Generate RMD data from ReflectionService for client use
+			if RMDData then
+				return RMDData
+			end
+			return false
 		end,
 		addtag = function(Player: Player, args)
 			local obj = args[1]

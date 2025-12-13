@@ -505,116 +505,118 @@ Main = (function()
 	end
 
 	Main.FetchRMD = function()
-		local rawXML
+		local rmdData
 		local didwedoit = Dex_RemoteFunction:InvokeServer("fetchrmd")
 
-		if didwedoit then
-			rawXML = didwedoit
-		else
-			if script:FindFirstChild("RMD") then
-				rawXML = require(script.RMD)
-			else
-				error("No RMD exists")
-			end
-		end
+		if not didwedoit or didwedoit == false then
+			-- Fallback to empty structure if server doesn't have RMD yet
+			return { Classes = {}, Enums = {}, PropertyOrders = {} }
+		elseif type(didwedoit) == "string" then
+			-- Legacy: Server provided XML string, parse it
+			Main.RawRMD = didwedoit
+			local parsed = Lib.ParseXML(didwedoit)
+			local classList = parsed.children[1].children[1].children
+			local enumList = parsed.children[1].children[2].children
+			local propertyOrders = {}
 
-		Main.RawRMD = rawXML
-		local parsed = Lib.ParseXML(rawXML)
-		local classList = parsed.children[1].children[1].children
-		local enumList = parsed.children[1].children[2].children
-		local propertyOrders = {}
-
-		local classes, enums = {}, {}
-		for _, class in pairs(classList) do
-			local className = ""
-			for _, child in pairs(class.children) do
-				if child.tag == "Properties" then
-					local data = { Properties = {}, Functions = {} }
-					local props = child.children
-					for _, prop in pairs(props) do
-						local name = prop.attrs.name
-						name = name:sub(1, 1):upper() .. name:sub(2)
-						data[name] = prop.children[1].text
-					end
-					className = data.Name
-					classes[className] = data
-				elseif child.attrs.class == "ReflectionMetadataProperties" then
-					local members = child.children
-					for _, member in pairs(members) do
-						if member.attrs.class == "ReflectionMetadataMember" then
-							local data = {}
-							if member.children[1].tag == "Properties" then
-								local props = member.children[1].children
-								for _, prop in pairs(props) do
-									if prop.attrs then
-										local name = prop.attrs.name
-										name = name:sub(1, 1):upper() .. name:sub(2)
-										data[name] = prop.children[1].text
-									end
-								end
-								if data.PropertyOrder then
-									local orders = propertyOrders[className]
-									if not orders then
-										orders = {}
-										propertyOrders[className] = orders
-									end
-									orders[data.Name] = tonumber(data.PropertyOrder)
-								end
-								classes[className].Properties[data.Name] = data
-							end
-						end
-					end
-				elseif child.attrs.class == "ReflectionMetadataFunctions" then
-					local members = child.children
-					for _, member in pairs(members) do
-						if member.attrs.class == "ReflectionMetadataMember" then
-							local data = {}
-							if member.children[1].tag == "Properties" then
-								local props = member.children[1].children
-								for _, prop in pairs(props) do
-									if prop.attrs then
-										local name = prop.attrs.name
-										name = name:sub(1, 1):upper() .. name:sub(2)
-										data[name] = prop.children[1].text
-									end
-								end
-								classes[className].Functions[data.Name] = data
-							end
-						end
-					end
-				end
-			end
-		end
-
-		for _, enum in pairs(enumList) do
-			local enumName = ""
-			for _, child in pairs(enum.children) do
-				if child.tag == "Properties" then
-					local data = { Items = {} }
-					local props = child.children
-					for _, prop in pairs(props) do
-						local name = prop.attrs.name
-						name = name:sub(1, 1):upper() .. name:sub(2)
-						data[name] = prop.children[1].text
-					end
-					enumName = data.Name
-					enums[enumName] = data
-				elseif child.attrs.class == "ReflectionMetadataEnumItem" then
-					local data = {}
-					if child.children[1].tag == "Properties" then
-						local props = child.children[1].children
+			local classes, enums = {}, {}
+			for _, class in pairs(classList) do
+				local className = ""
+				for _, child in pairs(class.children) do
+					if child.tag == "Properties" then
+						local data = { Properties = {}, Functions = {} }
+						local props = child.children
 						for _, prop in pairs(props) do
 							local name = prop.attrs.name
 							name = name:sub(1, 1):upper() .. name:sub(2)
 							data[name] = prop.children[1].text
 						end
-						enums[enumName].Items[data.Name] = data
+						className = data.Name
+						classes[className] = data
+					elseif child.attrs.class == "ReflectionMetadataProperties" then
+						local members = child.children
+						for _, member in pairs(members) do
+							if member.attrs.class == "ReflectionMetadataMember" then
+								local data = {}
+								if member.children[1].tag == "Properties" then
+									local props = member.children[1].children
+									for _, prop in pairs(props) do
+										if prop.attrs then
+											local name = prop.attrs.name
+											name = name:sub(1, 1):upper() .. name:sub(2)
+											data[name] = prop.children[1].text
+										end
+									end
+									if data.PropertyOrder then
+										local orders = propertyOrders[className]
+										if not orders then
+											orders = {}
+											propertyOrders[className] = orders
+										end
+										orders[data.Name] = tonumber(data.PropertyOrder)
+									end
+									classes[className].Properties[data.Name] = data
+								end
+							end
+						end
+					elseif child.attrs.class == "ReflectionMetadataFunctions" then
+						local members = child.children
+						for _, member in pairs(members) do
+							if member.attrs.class == "ReflectionMetadataMember" then
+								local data = {}
+								if member.children[1].tag == "Properties" then
+									local props = member.children[1].children
+									for _, prop in pairs(props) do
+										if prop.attrs then
+											local name = prop.attrs.name
+											name = name:sub(1, 1):upper() .. name:sub(2)
+											data[name] = prop.children[1].text
+										end
+									end
+									classes[className].Functions[data.Name] = data
+								end
+							end
+						end
 					end
 				end
 			end
-		end
 
-		return { Classes = classes, Enums = enums, PropertyOrders = propertyOrders }
+			for _, enum in pairs(enumList) do
+				local enumName = ""
+				for _, child in pairs(enum.children) do
+					if child.tag == "Properties" then
+						local data = { Items = {} }
+						local props = child.children
+						for _, prop in pairs(props) do
+							local name = prop.attrs.name
+							name = name:sub(1, 1):upper() .. name:sub(2)
+							data[name] = prop.children[1].text
+						end
+						enumName = data.Name
+						enums[enumName] = data
+					elseif child.attrs.class == "ReflectionMetadataEnumItem" then
+						local data = {}
+						if child.children[1].tag == "Properties" then
+							local props = child.children[1].children
+							for _, prop in pairs(props) do
+								local name = prop.attrs.name
+								name = name:sub(1, 1):upper() .. name:sub(2)
+								data[name] = prop.children[1].text
+							end
+							enums[enumName].Items[data.Name] = data
+						end
+					end
+				end
+			end
+
+			return { Classes = classes, Enums = enums, PropertyOrders = propertyOrders }
+		else
+			if script:FindFirstChild("RMD") then
+				return require(script.RMD)
+			else
+				return { Classes = {}, Enums = {}, PropertyOrders = {} }
+			end
+		end
 	end
 
 	Main.ShowGui = function(gui)
