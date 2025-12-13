@@ -512,8 +512,34 @@ Main = (function()
 			-- Fallback to empty structure if server doesn't have RMD yet
 			return { Classes = {}, Enums = {}, PropertyOrders = {} }
 		elseif type(didwedoit) == "string" then
-			-- Legacy: Server provided XML string, parse it
+			-- Server provided JSON or XML string
 			Main.RawRMD = didwedoit
+
+			-- Try to parse as JSON first (ReflectionService RMD)
+			local success, jsonData = pcall(service.HttpService.JSONDecode, service.HttpService, didwedoit)
+			if success and jsonData and type(jsonData) == "table" then
+				-- JSON RMD from ReflectionService - build proper structure
+				local classes, propertyOrders = {}, {}
+
+				if jsonData.Classes then
+					for className, classData in pairs(jsonData.Classes) do
+						classes[className] = classData
+
+						-- Build PropertyOrders from Properties array
+						if classData.Properties then
+							local orders = {}
+							for _, prop in ipairs(classData.Properties) do
+								orders[prop.Name] = prop.PropertyOrder or 0
+							end
+							propertyOrders[className] = orders
+						end
+					end
+				end
+
+				return { Classes = classes, Enums = {}, PropertyOrders = propertyOrders }
+			end
+
+			-- Fall back to XML parsing for legacy format
 			local parsed = Lib.ParseXML(didwedoit)
 			local classList = parsed.children[1].children[1].children
 			local enumList = parsed.children[1].children[2].children

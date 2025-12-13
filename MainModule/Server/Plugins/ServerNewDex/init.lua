@@ -32,19 +32,107 @@ return function(Vargs)
 		end
 	end
 
-	-- Generate API data from ReflectionService asynchronously
+	-- Generate API and RMD data from ReflectionService asynchronously
 	task.delay(0.25, function()
-		print("[SERVER] Starting API data generation from ReflectionService...")
+		print("[SERVER] Starting API and RMD data generation from ReflectionService...")
 
-		local reflectionSuccess, result = pcall(function()
-			-- Get all classes from ReflectionService
+		local reflectionSuccess, apiResult, rmdResult = pcall(function()
 			local classesData = ReflectionService:GetClasses()
 
-			-- Build API structure matching the expected format
+			-- Build API structure from ReflectionService
 			local apiData = {
 				Classes = {},
 				Enums = {},
 			}
+
+			-- Build minimal RMD structure - ONLY ReflectionService-unavailable data
+			local rmdData = {
+				Classes = {},
+			}
+
+			-- Property importance order heuristic (properties near start are more important)
+			local propertyPriority = {
+				-- Core properties
+				Name = 1, Parent = 2, Archivable = 3,
+				-- Appearance
+				Visible = 10, Transparency = 11, Color = 12, BackgroundColor3 = 12, TextColor3 = 13,
+				-- Position/Size
+				Position = 20, Size = 21, Rotation = 22, CFrame = 23, AbsolutePosition = 24, AbsoluteSize = 25,
+				-- Physics
+				CanCollide = 30, Friction = 31, Elasticity = 32, Density = 33, Velocity = 34, RotVelocity = 35,
+				-- Behavior
+				Anchored = 40, CanTouch = 41, TopSurface = 42, BottomSurface = 43,
+				-- Text properties
+				Text = 50, Font = 51, TextSize = 52, TextWrapped = 53, TextScaled = 54,
+				-- Audio
+				Volume = 60, Pitch = 61, TimePosition = 62,
+			}
+
+			-- Class icon mapping and display orders from original RMD
+			local classIconMap = {
+				-- Remotes/Events
+				RemoteEvent = 54, RemoteFunction = 55, BindableEvent = 67, BindableFunction = 66,
+				-- Services
+				Workspace = 19, Players = 20, Lighting = 18, ReplicatedStorage = 17, ReplicatedFirst = 17,
+				ServerScriptService = 16, ServerStorage = 17, UserInputService = 10, RunService = 10,
+				CollectionService = 10, HttpService = 10, MarketplaceService = 10, TeleportService = 10,
+				GamepadService = 10, NetworkServer = 10, NetworkClient = 10,
+				-- GUI
+				ScreenGui = 15, StarterGui = 15, Frame = 15, TextLabel = 15, TextButton = 15,
+				ImageLabel = 15, ImageButton = 15, ScrollingFrame = 15, UICorner = 15,
+				UIAspectRatioConstraint = 15, UIPadding = 15, UIGridLayout = 15, UIListLayout = 15,
+				UITableLayout = 15, UIScale = 15, SurfaceGui = 15, BillboardGui = 15, ContextActionService = 10,
+				-- Scripts
+				LocalScript = 10, Script = 12, ModuleScript = 11,
+				-- Parts
+				Part = 2, Model = 3, Terrain = 4, MeshPart = 2, UnionOperation = 2, NegateOperation = 2,
+				-- Humanoid
+				Humanoid = 9, Torso = 2, Head = 2, LeftArm = 2, RightArm = 2, LeftLeg = 2, RightLeg = 2,
+				-- Effects
+				ParticleEmitter = 6, Fire = 6, Smoke = 6, Explosion = 6, Sound = 5,
+				Weld = 7, WeldConstraint = 7, Motor = 7, Motor6D = 7, BodyVelocity = 7, BodyPosition = 7, BodyGyro = 7,
+				-- Rendering
+				Decal = 1, Texture = 1, Camera = 8, Light = 6, PointLight = 6, SurfaceLight = 6, Attachment = 81,
+				-- Values
+				Instance = 0, Configuration = 0, Folder = 0, IntValue = 0, StringValue = 0, BoolValue = 0,
+				Color3Value = 0, Vector3Value = 0, NumberValue = 0, ObjectValue = 0, RayValue = 0, CFrameValue = 0,
+				-- Misc
+				StarterPlayer = 14, StarterPack = 13, Actor = 113,
+			}
+
+			-- Class sort/display order (from original RMD - these are critical for proper sorting)
+			local classExplorerOrder = {
+				Workspace = 0, Players = 1, Lighting = 2, ReplicatedStorage = 3, ReplicatedFirst = 4,
+				ServerScriptService = 5, ServerStorage = 6, StarterPlayer = 7, StarterGui = 8, StarterPack = 9,
+				DataStoreService = 100, InsertService = 100, RunService = 100, HttpService = 100,
+			}
+
+			-- Get property importance score
+			local function getPropertyScore(propName)
+				return propertyPriority[propName] or 100 + string.len(propName)
+			end
+
+			-- Categorize class based on tags
+			local function getClassCategory(tags)
+				if tags.Service then return "Service" end
+				if tags.Creatable then return "Instance" end
+				if tags.Deprecated then return "Deprecated" end
+				return "Other"
+			end
+
+			-- Get icon index for a class
+			local function getClassIcon(className, tags)
+				if classIconMap[className] then
+					return classIconMap[className]
+				end
+				if tags.Service then return 10 end
+				if tags.Creatable then
+					if className:match("Gui$") or className:match("Label$") or className:match("Button$") or className:match("Frame$") then
+						return 40
+					elseif className:match("Script$") then return 30 end
+				end
+				return 0
+			end
 
 			-- Process classes
 			for _, classInfo in ipairs(classesData) do
@@ -58,7 +146,7 @@ return function(Vargs)
 					end
 				end
 
-				-- Build class entry
+				-- Build API class entry with ReflectionService data
 				local classEntry = {
 					Name = className,
 					Superclass = classInfo.Superclass,
@@ -66,11 +154,24 @@ return function(Vargs)
 					Members = {},
 				}
 
-				-- Get and store properties/events/functions for this class
+				-- Get properties
 				local propertiesData = ReflectionService:GetPropertiesOfClass(className)
+				local sortedProps = {}
 
 				for _, prop in ipairs(propertiesData) do
-					-- Include all properties (inherited and direct)
+					table.insert(sortedProps, prop)
+				end
+
+				-- Sort by importance
+				table.sort(sortedProps, function(a, b)
+					local scoreA = getPropertyScore(a.Name)
+					local scoreB = getPropertyScore(b.Name)
+					return scoreA < scoreB
+				end)
+
+				-- Build API members from ReflectionService
+				local propertyOrder = 0
+				for _, prop in ipairs(sortedProps) do
 					local propTags = {}
 					if prop.Tags then
 						for _, tag in ipairs(prop.Tags) do
@@ -93,7 +194,6 @@ return function(Vargs)
 						Tags = propTags,
 					}
 
-					-- Add ValueType
 					if prop.Type then
 						local valueTypeName = prop.Type.ScriptType or prop.Type.EngineType
 						if valueTypeName then
@@ -105,23 +205,50 @@ return function(Vargs)
 					end
 
 					table.insert(classEntry.Members, memberEntry)
+					propertyOrder = propertyOrder + 1
 				end
 
 				apiData.Classes[className] = classEntry
+
+				-- Build MINIMAL RMD entry - ONLY data that ReflectionService cannot provide
+				local rmdClassEntry = {
+					Name = className,
+					ClassCategory = getClassCategory(tags),
+					ExplorerImageIndex = getClassIcon(className, tags),
+					ExplorerOrder = classExplorerOrder[className] or 9999,
+				}
+
+				-- Only include PropertyOrder if we have it (important for property display order)
+				if propertyOrder > 0 then
+					rmdClassEntry.PropertyOrders = {}
+					local order = 0
+					for _, prop in ipairs(sortedProps) do
+						rmdClassEntry.PropertyOrders[prop.Name] = order
+						order = order + 1
+					end
+				end
+
+				rmdData.Classes[className] = rmdClassEntry
 			end
 
 			print("[SERVER] API data generation complete. Classes:", table.maxn(apiData.Classes))
+			print("[SERVER] RMD data generation complete. Classes:", table.maxn(rmdData.Classes))
+
 			-- JSON encode for transmission to client
-			return game:GetService("HttpService"):JSONEncode(apiData)
+			local apiJson = game:GetService("HttpService"):JSONEncode(apiData)
+			local rmdJson = game:GetService("HttpService"):JSONEncode(rmdData)
+
+			return apiJson, rmdJson
 		end)
 
 		if reflectionSuccess then
-			APIDump = result
-			print("[SERVER] Successfully generated API data from ReflectionService")
-			Logs:AddLog("Script", "Successfully generated API data from ReflectionService")
+			APIDump = apiResult
+			RMDData = rmdResult
+			print("[SERVER] Successfully generated API and RMD data from ReflectionService")
+			Logs:AddLog("Script", "Successfully generated API and RMD data from ReflectionService")
 		else
-			print("[SERVER ERROR] ReflectionService failed:", tostring(result))
-			Logs:AddLog("Errors", "Failed to generate API data from ReflectionService: " .. tostring(result))
+			print("[SERVER ERROR] ReflectionService failed:", tostring(apiResult))
+			Logs:AddLog("Errors", "Failed to generate API and RMD data from ReflectionService: " .. tostring(apiResult))
 		end
 	end)
 
