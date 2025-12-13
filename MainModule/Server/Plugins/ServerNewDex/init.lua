@@ -271,28 +271,39 @@ return function(Vargs)
 						Tags = propTags,
 					}
 
-					if prop.Type then
-						local valueTypeName = prop.Type.ScriptType or prop.Type.EngineType
-						if valueTypeName then
-							-- Map "boolean" to "bool" for client compatibility
-							if valueTypeName == "boolean" then
-								valueTypeName = "bool"
-							end
-							memberEntry.ValueType = {
-								Name = valueTypeName,
-								Category = "Primitive",
-							}
-						end
-					end
+				if prop.Type then
+					local valueTypeName = prop.Type.ScriptType or prop.Type.EngineType
+					if valueTypeName then
+						-- Determine category based on type name
+						local category = "Primitive"
 
-					table.insert(classEntry.Members, memberEntry)
-					propertyOrder = propertyOrder + 1
+						-- Detect enum types: check if ScriptType is "EnumItem" and EnumType exists
+						if (prop.Type.ScriptType == "EnumItem" or prop.Type.EngineType == "Enum") and prop.Type.EnumType then
+							-- Use the EnumType as the value type name (e.g., "Material", "PartType")
+							valueTypeName = prop.Type.EnumType
+							category = "Enum"
+						-- Detect class types
+						elseif valueTypeName == "Instance" or valueTypeName:match("^Class%.") then
+							category = "Class"
+						-- Map "boolean" to "bool" for client compatibility
+						elseif valueTypeName == "boolean" then
+							valueTypeName = "bool"
+						end
+
+						memberEntry.ValueType = {
+							Name = valueTypeName,
+							Category = category,
+						}
+					end
 				end
 
-				apiData.Classes[className] = classEntry
+				table.insert(classEntry.Members, memberEntry)
+				propertyOrder = propertyOrder + 1
+			end
+			apiData.Classes[className] = classEntry
 
-				-- Build MINIMAL RMD entry - ONLY data that ReflectionService cannot provide
-				local rmdClassEntry = {
+			-- Build MINIMAL RMD entry - ONLY data that ReflectionService cannot provide
+			local rmdClassEntry = {
 					Name = className,
 					ClassCategory = getClassCategory(tagsDict),
 					ExplorerImageIndex = getClassIcon(className, tagsDict),

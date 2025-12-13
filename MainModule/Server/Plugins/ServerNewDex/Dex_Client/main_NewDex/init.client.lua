@@ -334,7 +334,6 @@ Main = (function()
 	Main.FetchAPI = function()
 		local api, rawAPI
 		local didwedoit = Dex_RemoteFunction:InvokeServer("fetchapi")
-		print(didwedoit)
 		if didwedoit and type(didwedoit) == "string" then
 			rawAPI = didwedoit
 		else
