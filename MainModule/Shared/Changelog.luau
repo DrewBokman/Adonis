@@ -1,13 +1,20 @@
 return {
-	"Version: 273";
+	"Version: 274";
 	"*Drag edges to expand*";
 	"*Report bugs/issues on our GitHub repository*";
 	"";
-	"[v273 2025-11-10 21:14 UTC] @Dimenpsyonal";
+	"[v274 2025-12-05 17:10 UTC] @Dimenpsyonal";
+	"(Git/ImFirstPlace) Add PromptJoinGroup command (#2026)";
+	"";
+	"[v273 2025-12-05 17:10 UTC] @Dimenpsyonal";
 	"(Git/ccuser44) QoL improvement for tamper check (#1900)";
 	"(Git/fxeP1) Server API integrity patches (#2004)";
 	"(Git/fxeP1) Resolve locals being set nil in kill function (#2007)";
 	"(Git/ostrichman1) Add leave reasons to :leavelogs (#2005)";
+	"(Git/xBaconEgg) Patch LoadData Vulnerability (#1980)";
+	"(Git/Purple_Creativity) Refactor: Change CodeExecution commands from Admins to HeadAdmins (#1976)";
+	"(Git/P3tray) Make ;mute(ing) voice chat possible (#2013)";
+	"(Git/GuestDaProtogen) Audio API Support for :dex (#2000)";
 	"Changes to internal functionality inside Adonis:";
 	"> Remove warn usage by Adonis in reparent code (Server)";
 	"> Remove execute command in favor of sudo & tostring() plr UserId (Remote)";
