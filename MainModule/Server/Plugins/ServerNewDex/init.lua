@@ -209,29 +209,10 @@ return function(Vargs)
 			end
 		end,
 		fetchapi = function(Player: Player)
-			print("[SERVER] fetchapi called, APIDump exists:", APIDump ~= nil)
-			if APIDump then
-				print("[SERVER] Returning APIDump with", #APIDump.Classes, "classes")
-
-				-- Debug: Check what's actually in the first property
-				local firstClass = APIDump.Classes[1]
-				if firstClass then
-					local props = APIDump.ClassProperties[firstClass.Name]
-					if props and props[1] then
-						local firstProp = props[1]
-						print("[SERVER] First prop in APIDump:", firstProp.Name)
-						print("[SERVER] First prop ValueType field exists:", firstProp.ValueType ~= nil)
-						if firstProp.ValueType then
-							print("[SERVER] ValueType content:", firstProp.ValueType)
-							print("[SERVER] ValueType.Name:", firstProp.ValueType.Name)
-							print("[SERVER] ValueType.Category:", firstProp.ValueType.Category)
-							print("[SERVER] ValueType type:", type(firstProp.ValueType))
-							print("[SERVER] ValueType.Name type:", type(firstProp.ValueType.Name))
-						end
-					end
-				end
-			end
 			return APIDump or false
+		end,
+		fetchrmd = function(Player: Player)
+			return Reflection or false
 		end,
 		addtag = function(Player: Player, args)
 			local obj = args[1]
