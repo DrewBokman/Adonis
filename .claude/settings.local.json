@@ -3,7 +3,8 @@
     "allow": [
       "Bash(cd:*)",
       "Bash(cat:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "WebFetch(domain:robloxapi.github.io)"
     ],
     "deny": [],
     "ask": []

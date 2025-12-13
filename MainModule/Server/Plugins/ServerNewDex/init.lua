@@ -140,21 +140,21 @@ return function(Vargs)
 				return propertyPriority[propName] or 100 + string.len(propName)
 			end
 
-			-- Categorize class based on tags
-			local function getClassCategory(tags)
-				if tags.Service then return "Service" end
-				if tags.Creatable then return "Instance" end
-				if tags.Deprecated then return "Deprecated" end
+			-- Categorize class based on tags (expects dictionary)
+			local function getClassCategory(tagsDict)
+				if tagsDict.Service then return "Service" end
+				if tagsDict.Creatable then return "Instance" end
+				if tagsDict.Deprecated then return "Deprecated" end
 				return "Other"
 			end
 
-			-- Get icon index for a class
-			local function getClassIcon(className, tags)
+			-- Get icon index for a class (expects dictionary)
+			local function getClassIcon(className, tagsDict)
 				if classIconMap[className] then
 					return classIconMap[className]
 				end
-				if tags.Service then return 10 end
-				if tags.Creatable then
+				if tagsDict.Service then return 10 end
+				if tagsDict.Creatable then
 					if className:match("Gui$") or className:match("Label$") or className:match("Button$") or className:match("Frame$") then
 						return 40
 					elseif className:match("Script$") then return 30 end
@@ -162,15 +162,51 @@ return function(Vargs)
 				return 0
 			end
 
+			-- Build class lookup by name for superclass resolution
+			local classLookup = {}
+			for _, classInfo in ipairs(classesData) do
+				classLookup[classInfo.Name] = classInfo
+			end
+
+			-- First pass: collect all class properties
+			local allClassProps = {}
+			for _, classInfo in ipairs(classesData) do
+				local propsData = ReflectionService:GetPropertiesOfClass(classInfo.Name)
+				local propSet = {}
+				for _, prop in ipairs(propsData) do
+					propSet[prop.Name] = prop
+				end
+				allClassProps[classInfo.Name] = propSet
+			end
+
+			-- Helper: get all inherited property names by walking superclass chain
+			local function getInheritedProps(className)
+				local inherited = {}
+				local classInfo = classLookup[className]
+				if classInfo and classInfo.Superclass then
+					local superName = classInfo.Superclass
+					-- Get direct superclass properties
+					if allClassProps[superName] then
+						for propName, _ in pairs(allClassProps[superName]) do
+							inherited[propName] = true
+						end
+					end
+				end
+				return inherited
+			end
+
 			-- Process classes
 			for _, classInfo in ipairs(classesData) do
 				local className = classInfo.Name
 
-				-- Convert tags to dictionary format
+				-- Tags can be nil, handle that
+				local tagsDict = {}
 				local tags = {}
 				if classInfo.Tags then
 					for _, tag in ipairs(classInfo.Tags) do
-						tags[tostring(tag)] = true
+						local tagStr = tostring(tag)
+						tagsDict[tagStr] = true
+						table.insert(tags, tagStr)
 					end
 				end
 
@@ -182,12 +218,24 @@ return function(Vargs)
 					Members = {},
 				}
 
-				-- Get properties
-				local propertiesData = ReflectionService:GetPropertiesOfClass(className)
-				local sortedProps = {}
+				-- Get properties for this class
+				local thisClassProps = allClassProps[className] or {}
 
-				for _, prop in ipairs(propertiesData) do
-					table.insert(sortedProps, prop)
+				-- Get inherited properties to exclude
+				local inheritedProps = getInheritedProps(className)
+
+				-- Collect only properties that are NOT inherited (directly defined on this class)
+				local sortedProps = {}
+				for propName, prop in pairs(thisClassProps) do
+					-- Skip inherited props
+					if not inheritedProps[propName] then
+						-- Skip lowercase/deprecated variants (className, archivable, etc.)
+						-- Only include if the property name starts with uppercase
+						local firstChar = string.sub(propName, 1, 1)
+						if firstChar == string.upper(firstChar) then
+							table.insert(sortedProps, prop)
+						end
+					end
 				end
 
 				-- Sort by importance
@@ -200,10 +248,11 @@ return function(Vargs)
 				-- Build API members from ReflectionService
 				local propertyOrder = 0
 				for _, prop in ipairs(sortedProps) do
+					-- Tags can be nil
 					local propTags = {}
 					if prop.Tags then
 						for _, tag in ipairs(prop.Tags) do
-							propTags[tostring(tag)] = true
+							table.insert(propTags, tostring(tag))
 						end
 					end
 
@@ -225,6 +274,10 @@ return function(Vargs)
 					if prop.Type then
 						local valueTypeName = prop.Type.ScriptType or prop.Type.EngineType
 						if valueTypeName then
+							-- Map "boolean" to "bool" for client compatibility
+							if valueTypeName == "boolean" then
+								valueTypeName = "bool"
+							end
 							memberEntry.ValueType = {
 								Name = valueTypeName,
 								Category = "Primitive",
@@ -241,8 +294,8 @@ return function(Vargs)
 				-- Build MINIMAL RMD entry - ONLY data that ReflectionService cannot provide
 				local rmdClassEntry = {
 					Name = className,
-					ClassCategory = getClassCategory(tags),
-					ExplorerImageIndex = getClassIcon(className, tags),
+					ClassCategory = getClassCategory(tagsDict),
+					ExplorerImageIndex = getClassIcon(className, tagsDict),
 					ExplorerOrder = classExplorerOrder[className] or 9999,
 				}
 
