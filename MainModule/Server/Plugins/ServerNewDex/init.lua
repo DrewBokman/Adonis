@@ -13,9 +13,14 @@ return function(Vargs)
 	local Admin = Server.Admin
 	local Core = Server.Core
 
-	local ReflectionService = Service.ReflectionService
-	local APIDump = nil
+	local HttpService = Service.HttpService
+	local Success, APIDump, Reflection = nil
 	local ServerNewDex = {}
+
+	-- API/Reflection URLs
+	local ROBLOX_CLIENT_TRACKER_BASE = "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox"
+	local API_DUMP_URL = "https://github.com/MaximumADHD/Roblox-Client-Tracker/raw/roblox/API-Dump.json"
+	local REFLECTION_METADATA_URL = ROBLOX_CLIENT_TRACKER_BASE .. "/ReflectionMetadata.xml"
 
 	local newDex_main = script:WaitForChild("Dex_Client", 120)
 	local Event = ServerNewDex.Event
@@ -31,152 +36,32 @@ return function(Vargs)
 		end
 	end
 
-	-- Generate API data from ReflectionService
-	local function GenerateAPIDataFromReflection()
-		print("[SERVER] Starting API data generation from ReflectionService...")
-
-		-- Get all classes (no security filter needed on server)
-		local classesData = ReflectionService:GetClasses()
-
-		-- Build API structure with class data and properties
-		local apiData = {
-			Classes = {},
-			ClassProperties = {}, -- Store properties separately for efficiency
-		}
-
-		-- Build a map of parent class properties to filter out inherited ones
-		local classPropertyMap = {}
-
-		-- Process classes
-		for _, classInfo in ipairs(classesData) do
-			local className = classInfo.Name
-
-			-- Store class metadata (convert tags to plain table)
-			local tags = {}
-			if classInfo.Tags then
-				for _, tag in ipairs(classInfo.Tags) do
-					table.insert(tags, tostring(tag))
-				end
-			end
-
-			-- Get icon index if available (for Explorer tree icons)
-			local iconIndex = 0
-			if classInfo.Display and classInfo.Display.Icon then
-				iconIndex = classInfo.Display.Icon
-			end
-
-			-- Debug first class
-			if className == "Accessory" or className == "Part" then
-				print("[SERVER DEBUG]", className, "has Display:", classInfo.Display ~= nil)
-				if classInfo.Display then
-					print("[SERVER DEBUG]", className, "Icon:", classInfo.Display.Icon)
-				end
-			end
-
-			table.insert(apiData.Classes, {
-				Name = className,
-				Superclass = classInfo.Superclass,
-				Tags = tags,
-				ExplorerImageIndex = iconIndex,
-			})
-
-			-- Get and store properties for this class
-			local propertiesData = ReflectionService:GetPropertiesOfClass(className)
-			local serializedProps = {}
-
-			local totalProps = #propertiesData
-			local includedProps = 0
-
-			for i, prop in ipairs(propertiesData) do
-				-- Only include properties defined directly on this class (not inherited)
-				-- This prevents duplicates when traversing the class hierarchy
-				local definingClass = prop.DefiningClass
-
-				-- Debug for Part class
-				if className == "Part" and i <= 3 then
-					print("[SERVER DEBUG] Part property:", prop.Name, "DefiningClass:", definingClass)
-				end
-
-				if definingClass == className then
-					includedProps = includedProps + 1
-					-- Convert property userdata to plain table
-					local serializedProp = {
-						Name = prop.Name,
-						Category = (prop.Display and prop.Display.Category) or "Data",
-						ReadSecurity = (prop.Permits and tostring(prop.Permits.Read)) or "None",
-						WriteSecurity = (prop.Permits and tostring(prop.Permits.Write)) or "None",
-						Serialization = {
-							CanSave = prop.Serialized or false,
-							CanLoad = prop.Serialized or false,
-						},
-						Tags = {},
-					}
-
-					-- Convert tags
-					if prop.Tags then
-						for _, tag in ipairs(prop.Tags) do
-							table.insert(serializedProp.Tags, tostring(tag))
-						end
-					end
-
-					-- Convert ValueType
-					if prop.Type then
-						local valueTypeName = prop.Type.ScriptType or prop.Type.EngineType
-						local valueTypeCategory = "Primitive"
-
-						-- Create ValueType table
-						if valueTypeName then
-							serializedProp.ValueType = {
-								Name = valueTypeName,
-								Category = valueTypeCategory,
-							}
-						end
-					end
-
-					table.insert(serializedProps, serializedProp)
-				end
-			end
-
-			-- Debug property filtering for Part
-			if className == "Part" then
-				print("[SERVER DEBUG] Part: included", includedProps, "out of", totalProps, "total properties")
-			end
-
-			apiData.ClassProperties[className] = serializedProps
-		end
-
-		print("[SERVER] API data generation complete. Classes:", #apiData.Classes)
-		return apiData
-	end
-
 	task.delay(0.25, function() -- Load Dex instance data asynchronously
-		-- Use ReflectionService to generate API data
-		local reflectionSuccess, errorMsg = pcall(function()
-			APIDump = GenerateAPIDataFromReflection()
-		end)
-
-		if reflectionSuccess and APIDump then
-			print("[SERVER] Successfully generated API data:", #APIDump.Classes, "classes")
-
-			-- Debug: Check first class with properties
-			if APIDump.Classes[1] then
-				local firstClass = APIDump.Classes[1]
-				local props = APIDump.ClassProperties[firstClass.Name]
-				print("[SERVER] First class:", firstClass.Name, "with", props and #props or 0, "properties")
-
-				if props and #props > 0 then
-					local firstProp = props[1]
-					print(
-						"[SERVER] First property:",
-						tostring(firstProp.Name),
-						"ValueType:",
-						tostring(firstProp.ValueType and firstProp.ValueType.Name or "nil")
-					)
+		if Server.HTTP.HttpEnabled then
+			while true do
+				Success, APIDump = pcall(function()
+					return HttpService:GetAsync(API_DUMP_URL)
+				end)
+				if Success and APIDump then
+					break
 				end
+				task.wait(1)
 			end
+			Logs:AddLog("Script", "Successfully loaded instance API dump to Dex")
+			while true do
+				Success, Reflection = pcall(function()
+					return HttpService:GetAsync(REFLECTION_METADATA_URL)
+				end)
+				if Success and Reflection then
+					break
+				end
+				task.wait(1)
+			end
+			Logs:AddLog("Script", "Successfully loaded reflection metadata to Dex")
 		else
-			print("[SERVER ERROR] ReflectionService failed:", tostring(errorMsg))
-			Logs:AddLog("Errors", "Failed to generate API data from ReflectionService")
+			Logs:AddLog("Script", "Access to HttpService is not enabled! Dex API dump could not be fetched!")
+			Logs:AddLog("Errors", "Access to HttpService is not enabled! Dex API dump could not be fetched!")
+			--logError("Access to HttpService is not enabled! Dex api dump could not be fetched!")
 		end
 	end)
 
