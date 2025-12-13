@@ -14,7 +14,7 @@
 ]]
 
 -- Main vars
-local Main, Explorer, Properties, ScriptViewer, Console, ModelViewer, DefaultSettings, Notebook, Serializer, Lib
+local Main, Explorer, Properties, ScriptViewer, Console, ModelViewer, RemoteSpy, DefaultSettings, Notebook, Serializer, Lib
 local API, RMD
 local SettingsEditor
 local AboutMenu
@@ -152,7 +152,7 @@ end
 Main = (function()
 	local Main = {}
 
-	Main.ModuleList = { "Explorer", "Properties", "Console", "ModelViewer" } --Main.ModuleList = {"Explorer","Properties","ScriptViewer"}
+	Main.ModuleList = { "Explorer", "Properties", "Console", "ModelViewer", "RemoteSpy" } --Main.ModuleList = {"Explorer","Properties","ScriptViewer"}
 	Main.Elevated = false
 	Main.MissingEnv = {}
 	Main.Version = "Beta 1.0.6 Adonis"
@@ -237,10 +237,12 @@ Main = (function()
 		Console = Apps.Console
 		ModelViewer = Apps.ModelViewer
 		Notebook = Apps.Notebook
+		RemoteSpy = Apps.RemoteSpy
 		local appTable = {
 			Explorer = Explorer,
 			Properties = Properties,
 			Console = Console,
+			RemoteSpy = RemoteSpy,
 			ModelViewer = ModelViewer,
 			ScriptViewer = ScriptViewer,
 			Notebook = Notebook,
@@ -330,31 +332,33 @@ Main = (function()
 	-- end
 
 	Main.FetchAPI = function()
-		local api, rawAPI
-		local didwedoit = Dex_RemoteFunction:InvokeServer("fetchapi")
+		local apiData = Dex_RemoteFunction:InvokeServer("fetchapi")
 
-		if didwedoit and type(didwedoit) == "table" then
-			rawAPI = didwedoit
-		else
-			if script:FindFirstChild("API") then
-				rawAPI = require(script.API)
-			else
-				error("No API exists")
+		if not apiData or type(apiData) ~= "table" then
+			error("Failed to fetch API data from server")
+		end
+
+		print("[Dex Client] Received API data:", type(apiData))
+		print("[Dex Client] Classes count:", apiData.Classes and #apiData.Classes or "nil")
+
+		if apiData.Classes and apiData.Classes[1] then
+			local firstClass = apiData.Classes[1]
+			print("[Dex Client] First class:", firstClass.Name)
+			local props = apiData.ClassProperties[firstClass.Name]
+			print("[Dex Client] First class properties:", props and #props or "nil")
+
+			if props and props[1] then
+				local firstProp = props[1]
+				print("[Dex Client] First prop name:", firstProp.Name)
+				print("[Dex Client] First prop ValueType:", firstProp.ValueType)
+				if firstProp.ValueType then
+					print("[Dex Client] ValueType.Name:", firstProp.ValueType.Name)
+					print("[Dex Client] ValueType.Category:", firstProp.ValueType.Category)
+				end
 			end
 		end
 
-		Main.RawAPI = rawAPI
-
-		local success, result = pcall(service.HttpService.JSONDecode, service.HttpService, rawAPI)
-		if not success or type(result) ~= "table" then
-			if type(result) ~= "table" then
-				error(`Error while decoding Decoded data {result} is not type "table"`)
-			else
-				error(`Error while decoding {result}`)
-			end
-		else
-			api = result
-		end
+		Main.RawAPI = apiData
 
 		local classes, enums = {}, {}
 		local categoryOrder, seenCategories = {}, {}
@@ -373,7 +377,8 @@ Main = (function()
 			table.insert(t, pos, item)
 		end
 
-		for _, class in pairs(api.Classes) do
+		-- Process classes from ReflectionService data
+		for _, class in pairs(apiData.Classes) do
 			local newClass = {}
 			newClass.Name = class.Name
 			newClass.Superclass = class.Superclass
@@ -384,48 +389,41 @@ Main = (function()
 			newClass.Tags = {}
 
 			if class.Tags then
-				for c, tag in pairs(class.Tags) do
+				for _, tag in pairs(class.Tags) do
 					newClass.Tags[tag] = true
 				end
 			end
-			for __, member in pairs(class.Members) do
+			-- Get properties for this class from ClassProperties
+			local classProperties = apiData.ClassProperties[class.Name] or {}
+			for _, prop in ipairs(classProperties) do
 				local newMember = {}
-				newMember.Name = member.Name
+				newMember.Name = prop.Name
 				newMember.Class = class.Name
-				newMember.Security = member.Security
+
+				-- ReflectionService uses ReadSecurity and WriteSecurity separately
+				newMember.Security = {
+					Read = prop.ReadSecurity or "None",
+					Write = prop.WriteSecurity or "None",
+				}
+
 				newMember.Tags = {}
-				if member.Tags then
-					for c, tag in pairs(member.Tags) do
+				if prop.Tags then
+					for _, tag in pairs(prop.Tags) do
 						newMember.Tags[tag] = true
 					end
 				end
 
-				local mType = member.MemberType
-				if mType == "Property" then
-					local propCategory = member.Category or "Other"
-					propCategory = propCategory:match("^%s*(.-)%s*$")
-					if not seenCategories[propCategory] then
-						categoryOrder[#categoryOrder + 1] = propCategory
-						seenCategories[propCategory] = true
-					end
-					newMember.ValueType = member.ValueType
-					newMember.Category = propCategory
-					newMember.Serialization = member.Serialization
-					table.insert(newClass.Properties, newMember)
-				elseif mType == "Function" then
-					newMember.Parameters = {}
-					newMember.ReturnType = member.ReturnType.Name
-					for c, param in pairs(member.Parameters) do
-						table.insert(newMember.Parameters, { Name = param.Name, Type = param.Type.Name })
-					end
-					table.insert(newClass.Functions, newMember)
-				elseif mType == "Event" then
-					newMember.Parameters = {}
-					for c, param in pairs(member.Parameters) do
-						table.insert(newMember.Parameters, { Name = param.Name, Type = param.Type.Name })
-					end
-					table.insert(newClass.Events, newMember)
+				-- Process as property (ReflectionService only provides properties)
+				local propCategory = prop.Category or "Data"
+				propCategory = propCategory:match("^%s*(.-)%s*$")
+				if not seenCategories[propCategory] then
+					categoryOrder[#categoryOrder + 1] = propCategory
+					seenCategories[propCategory] = true
 				end
+				newMember.ValueType = prop.ValueType
+				newMember.Category = propCategory
+				newMember.Serialization = prop.Serialization
+				table.insert(newClass.Properties, newMember)
 			end
 
 			classes[class.Name] = newClass
@@ -435,25 +433,21 @@ Main = (function()
 			class.Superclass = classes[class.Superclass]
 		end
 
-		for _, enum in pairs(api.Enums) do
+		-- Process enums from Roblox's built-in Enum object (ReflectionService doesn't provide enum data)
+		for _, enumType in pairs(Enum:GetEnums()) do
 			local newEnum = {}
-			newEnum.Name = enum.Name
+			newEnum.Name = tostring(enumType)
 			newEnum.Items = {}
 			newEnum.Tags = {}
 
-			if enum.Tags then
-				for c, tag in pairs(enum.Tags) do
-					newEnum.Tags[tag] = true
-				end
-			end
-			for __, item in pairs(enum.Items) do
+			for _, enumItem in pairs(enumType:GetEnumItems()) do
 				local newItem = {}
-				newItem.Name = item.Name
-				newItem.Value = item.Value
+				newItem.Name = enumItem.Name
+				newItem.Value = enumItem.Value
 				table.insert(newEnum.Items, newItem)
 			end
 
-			enums[enum.Name] = newEnum
+			enums[newEnum.Name] = newEnum
 		end
 
 		local function getMember(class, member)
@@ -500,119 +494,6 @@ Main = (function()
 			CategoryOrder = categoryOrderMap,
 			GetMember = getMember,
 		}
-	end
-
-	Main.FetchRMD = function()
-		local rawXML
-		local didwedoit = Dex_RemoteFunction:InvokeServer("fetchrmd")
-
-		if didwedoit then
-			rawXML = didwedoit
-		else
-			if script:FindFirstChild("RMD") then
-				rawXML = require(script.RMD)
-			else
-				error("No RMD exists")
-			end
-		end
-
-		Main.RawRMD = rawXML
-		local parsed = Lib.ParseXML(rawXML)
-		local classList = parsed.children[1].children[1].children
-		local enumList = parsed.children[1].children[2].children
-		local propertyOrders = {}
-
-		local classes, enums = {}, {}
-		for _, class in pairs(classList) do
-			local className = ""
-			for _, child in pairs(class.children) do
-				if child.tag == "Properties" then
-					local data = { Properties = {}, Functions = {} }
-					local props = child.children
-					for _, prop in pairs(props) do
-						local name = prop.attrs.name
-						name = name:sub(1, 1):upper() .. name:sub(2)
-						data[name] = prop.children[1].text
-					end
-					className = data.Name
-					classes[className] = data
-				elseif child.attrs.class == "ReflectionMetadataProperties" then
-					local members = child.children
-					for _, member in pairs(members) do
-						if member.attrs.class == "ReflectionMetadataMember" then
-							local data = {}
-							if member.children[1].tag == "Properties" then
-								local props = member.children[1].children
-								for _, prop in pairs(props) do
-									if prop.attrs then
-										local name = prop.attrs.name
-										name = name:sub(1, 1):upper() .. name:sub(2)
-										data[name] = prop.children[1].text
-									end
-								end
-								if data.PropertyOrder then
-									local orders = propertyOrders[className]
-									if not orders then
-										orders = {}
-										propertyOrders[className] = orders
-									end
-									orders[data.Name] = tonumber(data.PropertyOrder)
-								end
-								classes[className].Properties[data.Name] = data
-							end
-						end
-					end
-				elseif child.attrs.class == "ReflectionMetadataFunctions" then
-					local members = child.children
-					for _, member in pairs(members) do
-						if member.attrs.class == "ReflectionMetadataMember" then
-							local data = {}
-							if member.children[1].tag == "Properties" then
-								local props = member.children[1].children
-								for _, prop in pairs(props) do
-									if prop.attrs then
-										local name = prop.attrs.name
-										name = name:sub(1, 1):upper() .. name:sub(2)
-										data[name] = prop.children[1].text
-									end
-								end
-								classes[className].Functions[data.Name] = data
-							end
-						end
-					end
-				end
-			end
-		end
-
-		for _, enum in pairs(enumList) do
-			local enumName = ""
-			for _, child in pairs(enum.children) do
-				if child.tag == "Properties" then
-					local data = { Items = {} }
-					local props = child.children
-					for _, prop in pairs(props) do
-						local name = prop.attrs.name
-						name = name:sub(1, 1):upper() .. name:sub(2)
-						data[name] = prop.children[1].text
-					end
-					enumName = data.Name
-					enums[enumName] = data
-				elseif child.attrs.class == "ReflectionMetadataEnumItem" then
-					local data = {}
-					if child.children[1].tag == "Properties" then
-						local props = child.children[1].children
-						for _, prop in pairs(props) do
-							local name = prop.attrs.name
-							name = name:sub(1, 1):upper() .. name:sub(2)
-							data[name] = prop.children[1].text
-						end
-						enums[enumName].Items[data.Name] = data
-					end
-				end
-			end
-		end
-
-		return { Classes = classes, Enums = enums, PropertyOrders = propertyOrders }
 	end
 
 	Main.ShowGui = function(gui)
@@ -1474,7 +1355,9 @@ Main = (function()
 			if Lib.StoredWindows then
 				for _, windowData in pairs(Lib.StoredWindows) do
 					if windowData.Close then
-						pcall(function() windowData:Close() end)
+						pcall(function()
+							windowData:Close()
+						end)
 					end
 					if windowData.Gui then
 						windowData.Gui:Destroy()
@@ -1494,6 +1377,9 @@ Main = (function()
 			end
 			if ModelViewer and ModelViewer.Window and ModelViewer.Window.Gui then
 				ModelViewer.Window.Gui:Destroy()
+			end
+			if RemoteSpy and RemoteSpy.Window and RemoteSpy.Window.Gui then
+				RemoteSpy.Window.Gui:Destroy()
 			end
 
 			-- Destroy main GUIs
@@ -1558,6 +1444,13 @@ Main = (function()
 		Main.CreateApp({ Name = "Console", IconMap = Main.LargeIcons, Icon = "Output", Window = Console.Window })
 
 		Main.CreateApp({ Name = "Model Viewer", IconMap = Main.LargeIcons, Icon = 6, Window = ModelViewer.Window })
+
+		Main.CreateApp({
+			Name = "Remote Spy",
+			IconMap = Main.MiscIcons,
+			Icon = "CallRemote",
+			Window = RemoteSpy.Window,
+		})
 
 		--Main.CreateApp({Name = "Script Viewer", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window})
 
@@ -1652,9 +1545,17 @@ Main = (function()
 		-- Fetch external deps
 		intro.SetProgress("Fetching API", 0.35)
 		API = Main.FetchAPI()
-		Lib.FastWait()
-		intro.SetProgress("Fetching RMD", 0.5)
-		RMD = Main.FetchRMD()
+		-- RMD (ReflectionMetadata) is no longer fetched - using ReflectionService instead
+		-- Build RMD structure from API data for icon compatibility
+		RMD = { PropertyOrders = {}, Classes = {}, Enums = {} }
+
+		-- Populate RMD.Classes with icon data from API
+		for className, classData in pairs(API.Classes) do
+			RMD.Classes[className] = {
+				ExplorerImageIndex = classData.ExplorerImageIndex or 0,
+			}
+		end
+
 		Lib.FastWait()
 
 		-- Load other modules
@@ -1672,6 +1573,7 @@ Main = (function()
 		Properties.Init()
 		Console.Init()
 		ModelViewer.Init()
+		RemoteSpy.Init()
 		--ScriptViewer.Init()
 
 		SettingsEditor.Init() -- init this last

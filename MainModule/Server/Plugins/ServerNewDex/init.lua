@@ -13,14 +13,9 @@ return function(Vargs)
 	local Admin = Server.Admin
 	local Core = Server.Core
 
-	local HttpService = Service.HttpService
-	local Success, APIDump, Reflection = nil
+	local ReflectionService = Service.ReflectionService
+	local APIDump = nil
 	local ServerNewDex = {}
-
-	-- API/Reflection URLs
-	local ROBLOX_CLIENT_TRACKER_BASE = "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox"
-	local API_DUMP_URL = "https://github.com/MaximumADHD/Roblox-Client-Tracker/raw/roblox/API-Dump.json"
-	local REFLECTION_METADATA_URL = ROBLOX_CLIENT_TRACKER_BASE .. "/ReflectionMetadata.xml"
 
 	local newDex_main = script:WaitForChild("Dex_Client", 120)
 	local Event = ServerNewDex.Event
@@ -36,39 +31,161 @@ return function(Vargs)
 		end
 	end
 
+	-- Generate API data from ReflectionService
+	local function GenerateAPIDataFromReflection()
+		print("[SERVER] Starting API data generation from ReflectionService...")
+
+		-- Get all classes (no security filter needed on server)
+		local classesData = ReflectionService:GetClasses()
+
+		-- Build API structure with class data and properties
+		local apiData = {
+			Classes = {},
+			ClassProperties = {}, -- Store properties separately for efficiency
+		}
+
+		-- Build a map of parent class properties to filter out inherited ones
+		local classPropertyMap = {}
+
+		-- Process classes
+		for _, classInfo in ipairs(classesData) do
+			local className = classInfo.Name
+
+			-- Store class metadata (convert tags to plain table)
+			local tags = {}
+			if classInfo.Tags then
+				for _, tag in ipairs(classInfo.Tags) do
+					table.insert(tags, tostring(tag))
+				end
+			end
+
+			-- Get icon index if available (for Explorer tree icons)
+			local iconIndex = 0
+			if classInfo.Display and classInfo.Display.Icon then
+				iconIndex = classInfo.Display.Icon
+			end
+
+			-- Debug first class
+			if className == "Accessory" or className == "Part" then
+				print("[SERVER DEBUG]", className, "has Display:", classInfo.Display ~= nil)
+				if classInfo.Display then
+					print("[SERVER DEBUG]", className, "Icon:", classInfo.Display.Icon)
+				end
+			end
+
+			table.insert(apiData.Classes, {
+				Name = className,
+				Superclass = classInfo.Superclass,
+				Tags = tags,
+				ExplorerImageIndex = iconIndex,
+			})
+
+			-- Get and store properties for this class
+			local propertiesData = ReflectionService:GetPropertiesOfClass(className)
+			local serializedProps = {}
+
+			local totalProps = #propertiesData
+			local includedProps = 0
+
+			for i, prop in ipairs(propertiesData) do
+				-- Only include properties defined directly on this class (not inherited)
+				-- This prevents duplicates when traversing the class hierarchy
+				local definingClass = prop.DefiningClass
+
+				-- Debug for Part class
+				if className == "Part" and i <= 3 then
+					print("[SERVER DEBUG] Part property:", prop.Name, "DefiningClass:", definingClass)
+				end
+
+				if definingClass == className then
+					includedProps = includedProps + 1
+					-- Convert property userdata to plain table
+					local serializedProp = {
+						Name = prop.Name,
+						Category = (prop.Display and prop.Display.Category) or "Data",
+						ReadSecurity = (prop.Permits and tostring(prop.Permits.Read)) or "None",
+						WriteSecurity = (prop.Permits and tostring(prop.Permits.Write)) or "None",
+						Serialization = {
+							CanSave = prop.Serialized or false,
+							CanLoad = prop.Serialized or false,
+						},
+						Tags = {},
+					}
+
+					-- Convert tags
+					if prop.Tags then
+						for _, tag in ipairs(prop.Tags) do
+							table.insert(serializedProp.Tags, tostring(tag))
+						end
+					end
+
+					-- Convert ValueType
+					if prop.Type then
+						local valueTypeName = prop.Type.ScriptType or prop.Type.EngineType
+						local valueTypeCategory = "Primitive"
+
+						-- Create ValueType table
+						if valueTypeName then
+							serializedProp.ValueType = {
+								Name = valueTypeName,
+								Category = valueTypeCategory,
+							}
+						end
+					end
+
+					table.insert(serializedProps, serializedProp)
+				end
+			end
+
+			-- Debug property filtering for Part
+			if className == "Part" then
+				print("[SERVER DEBUG] Part: included", includedProps, "out of", totalProps, "total properties")
+			end
+
+			apiData.ClassProperties[className] = serializedProps
+		end
+
+		print("[SERVER] API data generation complete. Classes:", #apiData.Classes)
+		return apiData
+	end
+
 	task.delay(0.25, function() -- Load Dex instance data asynchronously
-		if Server.HTTP.HttpEnabled then
-			while true do
-				Success, APIDump = pcall(function()
-					return HttpService:GetAsync(API_DUMP_URL)
-				end)
-				if Success and APIDump then
-					break
+		-- Use ReflectionService to generate API data
+		local reflectionSuccess, errorMsg = pcall(function()
+			APIDump = GenerateAPIDataFromReflection()
+		end)
+
+		if reflectionSuccess and APIDump then
+			print("[SERVER] Successfully generated API data:", #APIDump.Classes, "classes")
+
+			-- Debug: Check first class with properties
+			if APIDump.Classes[1] then
+				local firstClass = APIDump.Classes[1]
+				local props = APIDump.ClassProperties[firstClass.Name]
+				print("[SERVER] First class:", firstClass.Name, "with", props and #props or 0, "properties")
+
+				if props and #props > 0 then
+					local firstProp = props[1]
+					print(
+						"[SERVER] First property:",
+						tostring(firstProp.Name),
+						"ValueType:",
+						tostring(firstProp.ValueType and firstProp.ValueType.Name or "nil")
+					)
 				end
-				task.wait(1)
 			end
-			Logs:AddLog("Script", "Successfully loaded instance API dump to Dex")
-			while true do
-				Success, Reflection = pcall(function()
-					return HttpService:GetAsync(REFLECTION_METADATA_URL)
-				end)
-				if Success and Reflection then
-					break
-				end
-				task.wait(1)
-			end
-			Logs:AddLog("Script", "Successfully loaded reflection metadata to Dex")
 		else
-			Logs:AddLog("Script", "Access to HttpService is not enabled! Dex API dump could not be fetched!")
-			Logs:AddLog("Errors", "Access to HttpService is not enabled! Dex API dump could not be fetched!")
-			--logError("Access to HttpService is not enabled! Dex api dump could not be fetched!")
+			print("[SERVER ERROR] ReflectionService failed:", tostring(errorMsg))
+			Logs:AddLog("Errors", "Failed to generate API data from ReflectionService")
 		end
 	end)
 
 	ServerNewDex.newDex_main = newDex_main
 	ServerNewDex.Event = nil
 	ServerNewDex.LogEvent = nil -- RemoteEvent for pushing logs to clients
+	ServerNewDex.RemoteSpy_LogEvent = nil -- RemoteEvent for RemoteSpy logs
 	ServerNewDex.Authorized = {} --// Users who have been given Dex and are authorized to use the remote event
+	ServerNewDex.RemoteSpyMonitoring = {} -- Players actively monitoring remotes
 
 	-- Server-side log capturing
 	local LogService = Service.LogService
@@ -207,10 +324,29 @@ return function(Vargs)
 			end
 		end,
 		fetchapi = function(Player: Player)
+			print("[SERVER] fetchapi called, APIDump exists:", APIDump ~= nil)
+			if APIDump then
+				print("[SERVER] Returning APIDump with", #APIDump.Classes, "classes")
+
+				-- Debug: Check what's actually in the first property
+				local firstClass = APIDump.Classes[1]
+				if firstClass then
+					local props = APIDump.ClassProperties[firstClass.Name]
+					if props and props[1] then
+						local firstProp = props[1]
+						print("[SERVER] First prop in APIDump:", firstProp.Name)
+						print("[SERVER] First prop ValueType field exists:", firstProp.ValueType ~= nil)
+						if firstProp.ValueType then
+							print("[SERVER] ValueType content:", firstProp.ValueType)
+							print("[SERVER] ValueType.Name:", firstProp.ValueType.Name)
+							print("[SERVER] ValueType.Category:", firstProp.ValueType.Category)
+							print("[SERVER] ValueType type:", type(firstProp.ValueType))
+							print("[SERVER] ValueType.Name type:", type(firstProp.ValueType.Name))
+						end
+					end
+				end
+			end
 			return APIDump or false
-		end,
-		fetchrmd = function(Player: Player)
-			return Reflection or false
 		end,
 		addtag = function(Player: Player, args)
 			local obj = args[1]
@@ -274,6 +410,24 @@ return function(Vargs)
 			-- Send complete server log history to client
 			return ServerLogHistory
 		end,
+
+		startremotespy = function(_Player: Player, _args, realPlr: Player)
+			-- Start monitoring remotes for this player
+			if not ServerNewDex.RemoteSpyMonitoring[realPlr] then
+				ServerNewDex.RemoteSpyMonitoring[realPlr] = true
+				return true
+			end
+			return false
+		end,
+
+		stopremotespy = function(_Player: Player, _args, realPlr: Player)
+			-- Stop monitoring remotes for this player
+			if ServerNewDex.RemoteSpyMonitoring[realPlr] then
+				ServerNewDex.RemoteSpyMonitoring[realPlr] = nil
+				return true
+			end
+			return false
+		end,
 	}
 
 	function ServerNewDex.MakeEvent()
@@ -308,7 +462,149 @@ return function(Vargs)
 				Parent = game:GetService("ReplicatedStorage"),
 			}, true, true)
 		end
+
+		-- Create RemoteSpy_LogEvent for pushing remote spy logs to clients
+		if not ServerNewDex.RemoteSpy_LogEvent then
+			ServerNewDex.RemoteSpy_LogEvent = Service.New("RemoteEvent", {
+				Name = "RemoteSpy_LogEvent",
+				Parent = game:GetService("ReplicatedStorage"),
+			}, true, true)
+		end
 	end
+
+	-- Remote monitoring system (Lazy Loading)
+	local MonitoredRemotes = {}
+	local MonitoringActive = false
+	local DescendantAddedConnection = nil
+
+	local function setupRemoteMonitoring(remote)
+		if MonitoredRemotes[remote] then
+			return -- Already monitoring
+		end
+
+		local remoteName = remote:GetFullName()
+		local remoteType = remote.ClassName
+
+		if remoteType == "RemoteEvent" then
+			-- Hook OnServerEvent
+			local originalEvent = remote.OnServerEvent
+			MonitoredRemotes[remote] = originalEvent:Connect(function(player, ...)
+				-- Broadcast to all monitoring clients
+				for monitoringPlayer, _ in pairs(ServerNewDex.RemoteSpyMonitoring) do
+					if monitoringPlayer and monitoringPlayer.Parent and ServerNewDex.RemoteSpy_LogEvent then
+						local args = { ... }
+
+						local logData = {
+							remoteType = "FireServer",
+							remoteName = remoteName,
+							caller = player.Name,
+							args = args, -- Send raw args to client for detailed inspection
+							timestamp = os.time(),
+						}
+
+						ServerNewDex.RemoteSpy_LogEvent:FireClient(monitoringPlayer, logData)
+					end
+				end
+			end)
+		elseif remoteType == "RemoteFunction" then
+			-- RemoteFunctions can't be hooked because OnServerInvoke is write-only
+			-- and we can't override the metatable on Roblox instances
+			-- For now, just mark as seen but don't actually hook
+			MonitoredRemotes[remote] = true
+		end
+	end
+
+	-- Start monitoring all existing and new remotes
+	local function startMonitoring()
+		if MonitoringActive then
+			return -- Already monitoring
+		end
+		MonitoringActive = true
+
+		-- Monitor existing remotes (only RemoteEvents will actually be hooked)
+		for _, descendant in ipairs(game:GetDescendants()) do
+			if descendant:IsA("RemoteEvent") then
+				setupRemoteMonitoring(descendant)
+			end
+		end
+
+		-- Monitor new remotes going forward
+		if not DescendantAddedConnection then
+			DescendantAddedConnection = game.DescendantAdded:Connect(function(descendant)
+				if descendant:IsA("RemoteEvent") then
+					task.wait(0.1) -- Small delay to let it initialize
+					setupRemoteMonitoring(descendant)
+				end
+			end)
+		end
+	end
+
+	-- Stop monitoring remotes when no one is using RemoteSpy
+	local function stopMonitoring()
+		if not MonitoringActive then
+			return
+		end
+		MonitoringActive = false
+
+		-- Disconnect existing connections
+		for remote, connection in pairs(MonitoredRemotes) do
+			if typeof(connection) == "RBXScriptConnection" then
+				connection:Disconnect()
+			end
+		end
+		MonitoredRemotes = {}
+
+		-- Disconnect the DescendantAdded connection
+		if DescendantAddedConnection then
+			DescendantAddedConnection:Disconnect()
+			DescendantAddedConnection = nil
+		end
+	end
+
+	-- Monitor when players start/stop monitoring
+	local OriginalStartRemoteSpy = Actions.startremotespy
+	local OriginalStopRemoteSpy = Actions.stopremotespy
+
+	Actions.startremotespy = function(...)
+		local result = OriginalStartRemoteSpy(...)
+		-- Start monitoring only when first player enables it
+		local activeMonitors = 0
+		for _, _ in pairs(ServerNewDex.RemoteSpyMonitoring) do
+			activeMonitors = activeMonitors + 1
+		end
+		if activeMonitors > 0 then
+			startMonitoring()
+		end
+		return result
+	end
+
+	Actions.stopremotespy = function(...)
+		local result = OriginalStopRemoteSpy(...)
+		-- Stop monitoring if no one is actively monitoring
+		local activeMonitors = 0
+		for _, _ in pairs(ServerNewDex.RemoteSpyMonitoring) do
+			activeMonitors = activeMonitors + 1
+		end
+		if activeMonitors == 0 then
+			stopMonitoring()
+		end
+		return result
+	end
+
+	-- Clean up monitoring when a player leaves
+	game:GetService("Players").PlayerRemoving:Connect(function(player)
+		if ServerNewDex.RemoteSpyMonitoring[player] then
+			ServerNewDex.RemoteSpyMonitoring[player] = nil
+			-- Check if anyone else is monitoring
+			local activeMonitors = 0
+			for _, _ in pairs(ServerNewDex.RemoteSpyMonitoring) do
+				activeMonitors = activeMonitors + 1
+			end
+			if activeMonitors == 0 then
+				stopMonitoring()
+			end
+		end
+	end)
 
 	function ServerNewDex.MakeLocalDexForPlayer(ply, dexGui, destination)
 		if ply then
